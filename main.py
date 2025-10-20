@@ -745,6 +745,7 @@ DATABASE_CATALOG = {
         "indicator_count": 2
     },
 }
+
 THEME_TAXONOMY = {
     "Economy": ["GDP", "Growth", "Trade", "Investment", "Employment", "Productivity", "Fiscal Policy"],
     "Demographics": ["Population", "Migration", "Urbanization", "Age Structure", "Vital Statistics"],
@@ -874,7 +875,6 @@ INCOME_GROUPS = {
 @st.cache_data(ttl=3600)
 def discover_databases():
     """Cached database discovery - returns known list of databases"""
-    # Return the known list of 89 databases (from our discovery analysis)
     known_databases = [
         'BS_BTI', 'BS_SGI', 'FAO_AS', 'FH_FIW', 'GEM_APS', 'GEM_NES', 'GI_AII', 
         'IDB_INFRALATAM', 'IFC_GB', 'ILO_EMP', 'IMF_BOP', 'IMF_BOPAGG', 'IMF_CDIR', 
@@ -892,10 +892,8 @@ def discover_databases():
         'WEF_GCI', 'WEF_GCIHH', 'WEF_TTDI', 'WI_GRT', 'WJP_ROL', 'WRI_CLIMATEWATCH'
     ]
     
-    # Optionally try to discover via API as well (with fallback)
     try:
         client = Data360Client()
-        # Try a simple search with a common term instead of wildcard
         result = client.search("population", top=1000)
         
         if "value" in result:
@@ -906,12 +904,10 @@ def discover_databases():
                     if db_id:
                         api_databases.add(db_id)
             
-            # Combine known databases with any newly discovered ones
             if api_databases:
                 all_databases = set(known_databases) | api_databases
                 return sorted(list(all_databases))
     except:
-        # If API fails, just use known databases
         pass
     
     return sorted(known_databases)
@@ -923,10 +919,8 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
     client = Data360Client()
     
     try:
-        # Use the /indicators endpoint which is more reliable
         indicator_ids = client.list_indicators(database_id)
         
-        # Convert to format expected by the app
         indicators = []
         for ind_id in indicator_ids[:limit]:
             indicators.append({
@@ -940,7 +934,6 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
         
         return indicators
     except Exception as e:
-        # Fallback: return empty list
         st.warning(f"Could not load indicators for {database_id}. Using indicator query instead.")
         return []
 
@@ -953,7 +946,6 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
     """Search with filters including organizations"""
     client = Data360Client()
     
-    # Don't use wildcard - use a common search term instead
     if not query or query.strip() == "" or query == "*":
         query = "population"
     
@@ -963,7 +955,6 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
         theme_filter = " or ".join([f"series_description/topics/any(t: t/name eq '{theme}')" for theme in themes])
         filters.append(f"({theme_filter})")
     
-    # Filter by organization - get databases for selected organizations
     if organizations:
         org_databases = [
             db_id for db_id, info in DATABASE_CATALOG.items()
@@ -996,7 +987,6 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
         
         return indicators, result.get("@odata.count", len(indicators))
     except Exception as e:
-        # If search fails, return empty results
         st.warning(f"Search temporarily unavailable. Showing database catalog instead.")
         return [], 0
 
@@ -1381,7 +1371,6 @@ if 'last_search_results' not in st.session_state:
 # INITIALIZATION
 # ============================================================================
 
-# Load databases
 if st.session_state.databases is None:
     with st.spinner("🔄 Loading databases..."):
         st.session_state.databases = discover_databases()
@@ -1414,7 +1403,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Create elegant filter layout with better spacing
 st.markdown("<div style='margin: 20px 0;'>", unsafe_allow_html=True)
 filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([3, 2, 2, 1])
 
@@ -1429,7 +1417,6 @@ with filter_col1:
 
 with filter_col2:
     st.markdown("#### 📚 Themes")
-    # Count databases by theme
     theme_counts = defaultdict(int)
     for db_id, info in DATABASE_CATALOG.items():
         for theme in info.get("themes", []):
@@ -1448,7 +1435,6 @@ with filter_col2:
 
 with filter_col3:
     st.markdown("#### 🏢 Organizations")
-    # Count databases by organization
     org_counts = defaultdict(int)
     for db_id, info in DATABASE_CATALOG.items():
         org = info.get("organization", "Unknown")
@@ -1474,7 +1460,6 @@ with filter_col4:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# Active filters display
 if st.session_state.selected_themes or st.session_state.get('selected_organizations'):
     st.markdown("<div style='margin: 15px 0;'>", unsafe_allow_html=True)
     st.markdown("**🏷️ Active Filters:**")
@@ -1486,12 +1471,12 @@ if st.session_state.selected_themes or st.session_state.get('selected_organizati
     st.markdown(filter_html, unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Stats row with elegant design
 st.markdown("""
     <div style='text-align: center; margin: 30px 0 20px 0;'>
         <div style='height: 2px; background: linear-gradient(90deg, transparent, #4a9eff, transparent);'></div>
     </div>
 """, unsafe_allow_html=True)
+
 stat_col1, stat_col2, stat_col3, stat_col4, stat_col5 = st.columns(5)
 with stat_col1:
     st.metric("📊 Databases", len(st.session_state.databases))
@@ -1503,7 +1488,6 @@ with stat_col4:
     active_filters = len(st.session_state.selected_themes) + len(st.session_state.get('selected_organizations', []))
     st.metric("🎯 Active Filters", active_filters)
 with stat_col5:
-    # Count filtered databases
     filtered_count = 0
     for db_id, info in DATABASE_CATALOG.items():
         if st.session_state.get('selected_organizations') and info['organization'] not in st.session_state.selected_organizations:
@@ -1514,7 +1498,6 @@ with stat_col5:
         filtered_count += 1
     st.metric("📁 Showing", filtered_count)
 
-# Bottom separator
 st.markdown("""
     <div style='text-align: center; margin: 20px 0 30px 0;'>
         <div style='height: 2px; background: linear-gradient(90deg, transparent, #667eea, transparent);'></div>
@@ -1543,7 +1526,6 @@ with tab1:
     st.markdown("## Browse Datasets")
     st.markdown("Explore available datasets with detailed information")
     
-    # Search and sort
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
@@ -1568,20 +1550,16 @@ with tab1:
             key="items_per_page"
         )
     
-    # Filter datasets based on selections
     filtered_datasets = {}
     
     for db_id, info in DATABASE_CATALOG.items():
-        # Filter by organization
         if st.session_state.get('selected_organizations') and info['organization'] not in st.session_state.selected_organizations:
             continue
         
-        # Filter by theme
         if st.session_state.selected_themes:
             if not any(theme in info.get('themes', []) for theme in st.session_state.selected_themes):
                 continue
         
-        # Filter by search
         if dataset_search:
             search_lower = dataset_search.lower()
             if not (
@@ -1593,7 +1571,6 @@ with tab1:
         
         filtered_datasets[db_id] = info
     
-    # Sort datasets
     if sort_by == "Name (A-Z)":
         sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1]['name'])
     elif sort_by == "Name (Z-A)":
@@ -1605,7 +1582,6 @@ with tab1:
     else:
         sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1]['name'])
     
-    # Display results count
     total_count = len(filtered_datasets)
     st.markdown(f"### Showing **1-{min(items_per_page, total_count)}** of **{total_count}** datasets")
     
@@ -1620,31 +1596,24 @@ with tab1:
     
     st.markdown("---")
     
-    # Display datasets
     for idx, (db_id, info) in enumerate(sorted_datasets[:items_per_page], 1):
         with st.container():
-            # Header with icon and name
             col1, col2 = st.columns([5, 1])
             
             with col1:
                 st.markdown(f"### 🗂️ {info['name']}")
                 
-                # Metadata
                 st.caption(f"**Last updated:** Recently | **{info.get('indicator_count', 'N/A')}** Indicators")
                 
-                # Organization badge
                 org_html = f'<span class="database-badge">{info["organization"]}</span>'
                 st.markdown(org_html, unsafe_allow_html=True)
                 
-                # Description
                 st.markdown(f"*{info['description']}*")
                 
-                # Themes/Topics
                 if info.get('themes'):
                     themes_html = " ".join([f'<span class="tag">{t}</span>' for t in info['themes'][:5]])
                     st.markdown(themes_html, unsafe_allow_html=True)
                 
-                # Database ID
                 st.caption(f"📊 Dataset ID: `{db_id}`")
             
             with col2:
@@ -1652,16 +1621,71 @@ with tab1:
                 st.caption("INDICATORS")
                 
                 if st.button("📈 Explore", key=f"dataset_explore_{db_id}", use_container_width=True):
-                    # Store the selected database in session state
-                    st.session_state.query_database = db_id
-                    st.session_state.show_query_tab = True
-                    st.info(f"✅ Selected {info['name']}. Switch to 'Query & Visualize' tab to continue.")
+                    st.session_state.exploring_database = db_id
+                    st.session_state.exploring_db_name = info['name']
+                    st.rerun()
             
             st.markdown("---")
     
-    # Pagination info
     if total_count > items_per_page:
         st.info(f"Showing first {items_per_page} datasets. Use filters to narrow results or increase items per page.")
+    
+    if 'exploring_database' in st.session_state and st.session_state.exploring_database:
+        st.markdown("---")
+        st.markdown(f"## 🔍 Exploring: {st.session_state.get('exploring_db_name', 'Database')}")
+        
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.info(f"📊 Database: `{st.session_state.exploring_database}`")
+        with col2:
+            if st.button("❌ Close", key="close_explore", use_container_width=True):
+                del st.session_state.exploring_database
+                del st.session_state.exploring_db_name
+                st.rerun()
+        
+        with st.spinner(f"Loading indicators from {st.session_state.exploring_database}..."):
+            explore_indicators = get_indicators_with_metadata(st.session_state.exploring_database, limit=100)
+            
+            if explore_indicators:
+                st.success(f"✅ Found {len(explore_indicators)} indicators")
+                
+                indicator_search = st.text_input(
+                    "🔎 Filter indicators",
+                    placeholder="Search within this database...",
+                    key="explore_indicator_search"
+                )
+                
+                if indicator_search:
+                    filtered_explore = [
+                        ind for ind in explore_indicators 
+                        if indicator_search.lower() in ind['name'].lower() 
+                        or indicator_search.lower() in ind['id'].lower()
+                    ]
+                else:
+                    filtered_explore = explore_indicators[:50]
+                
+                st.markdown(f"### Showing {len(filtered_explore)} indicators")
+                
+                for ind in filtered_explore:
+                    with st.container():
+                        col1, col2 = st.columns([5, 1])
+                        
+                        with col1:
+                            st.markdown(f"**{ind['name']}**")
+                            st.caption(f"🆔 `{ind['id']}`")
+                            if ind.get('description'):
+                                st.caption(ind['description'][:150] + "..." if len(ind.get('description', '')) > 150 else ind.get('description', ''))
+                        
+                        with col2:
+                            if st.button("📊 Query", key=f"explore_query_{ind['id']}", use_container_width=True):
+                                st.session_state.selected_indicator = ind
+                                st.session_state.query_database = st.session_state.exploring_database
+                                st.session_state.active_tab = "Query & Visualize"
+                                st.success(f"✅ Selected indicator. Go to 'Query & Visualize' tab.")
+                        
+                        st.markdown("---")
+            else:
+                st.warning("⚠️ No indicators found in this database.")
 
 
 # ============================================================================
@@ -1671,7 +1695,7 @@ with tab1:
 with tab2:
     st.markdown("## Explore Indicators")
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
         search_query = st.text_input(
@@ -1687,7 +1711,12 @@ with tab2:
             key="sort_option"
         )
     
-    # Display active filters
+    with col3:
+        if 'last_search_results' in st.session_state and st.session_state.last_search_results:
+            if st.button("🗑️ Clear", use_container_width=True, key="clear_search_results"):
+                del st.session_state.last_search_results
+                st.rerun()
+    
     if st.session_state.selected_themes or st.session_state.get('selected_organizations'):
         st.markdown("**Active filters:**")
         filter_html = ""
@@ -1697,17 +1726,21 @@ with tab2:
             filter_html += f'<span class="database-badge">{org}</span>'
         st.markdown(filter_html, unsafe_allow_html=True)
     
-    # Search button
-    if st.button("🚀 Search", type="primary", use_container_width=True) or search_query:
-        with st.spinner("Searching indicators..."):
-            indicators, total_count = search_indicators_filtered(
-                query=search_query if search_query else "*",
-                themes=st.session_state.selected_themes if st.session_state.selected_themes else None,
-                organizations=st.session_state.get('selected_organizations') if st.session_state.get('selected_organizations') else None,
-                databases=st.session_state.selected_databases if st.session_state.selected_databases else None,
-                limit=100
-            )
-    # Show last search results if available
+    if st.button("🚀 Search", type="primary", use_container_width=True):
+        if search_query or st.session_state.selected_themes or st.session_state.get('selected_organizations'):
+            with st.spinner("Searching indicators..."):
+                indicators, total_count = search_indicators_filtered(
+                    query=search_query if search_query else "population",
+                    themes=st.session_state.selected_themes if st.session_state.selected_themes else None,
+                    organizations=st.session_state.get('selected_organizations') if st.session_state.get('selected_organizations') else None,
+                    databases=st.session_state.selected_databases if st.session_state.selected_databases else None,
+                    limit=100
+                )
+                st.session_state.last_search_results = {'indicators': indicators, 'total_count': total_count}
+                st.rerun()
+        else:
+            st.warning("⚠️ Please enter a search term or select at least one filter")
+    
     if 'last_search_results' in st.session_state and st.session_state.last_search_results:
         indicators = st.session_state.last_search_results['indicators']
         total_count = st.session_state.last_search_results['total_count']
@@ -1715,12 +1748,10 @@ with tab2:
         st.markdown(f"### Results: Showing **{len(indicators)}** of **{total_count}** indicators")
         
         if indicators:
-            # Group by database
             by_database = defaultdict(list)
             for ind in indicators:
                 by_database[ind['database_id']].append(ind)
             
-            # Display results
             for db_id, db_indicators in sorted(by_database.items()):
                 db_info = DATABASE_CATALOG.get(db_id, {"name": db_id, "organization": "Unknown"})
                 
@@ -1728,7 +1759,7 @@ with tab2:
                     f"📊 **{db_info['name']}** ({db_id}) - {len(db_indicators)} indicators",
                     expanded=True
                 ):
-                    for ind in db_indicators[:20]:  # Show first 20
+                    for ind in db_indicators[:20]:
                         col1, col2 = st.columns([4, 1])
                         
                         with col1:
@@ -1737,7 +1768,6 @@ with tab2:
                                 st.caption(ind['description'][:200] + "..." if len(ind['description']) > 200 else ind['description'])
                             st.caption(f"🆔 `{ind['id']}`")
                             
-                            # Topics
                             if ind['topics']:
                                 topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'][:5]])
                                 st.markdown(topics_html, unsafe_allow_html=True)
@@ -1758,27 +1788,56 @@ with tab2:
             - Browsing the **Browse Datasets** tab to explore available data
             """)
     else:
-        # Show helpful message when no search has been performed
         st.info("👋 **Welcome to Indicator Explorer!**")
         st.markdown("""
         ### How to get started:
         
         1. **🔍 Enter a search term** above (e.g., "GDP", "education", "health")
-        2. **📚 Apply filters** at the top (Themes or Organizations)
+        2. **📚 Apply filters** at the top of the page (Themes or Organizations)
         3. **🚀 Click Search** to find indicators
         
-        Or browse the **Browse Datasets** tab to explore by database!
-        """)
+        ### 💡 Example searches to try:
         
-        # Show some example searches as text
-        st.markdown("### 💡 Example searches to try:")
-        st.markdown("""
         - `population` - Find population statistics
         - `GDP` - Economic growth indicators
         - `climate` or `emissions` - Environmental data
         - `education` or `literacy` - Education statistics
         - `health` or `mortality` - Health indicators
+        
+        ### Or try these shortcuts:
         """)
+        
+        quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
+        
+        with quick_col1:
+            if st.button("📊 Search GDP", use_container_width=True, key="quick_gdp"):
+                st.session_state.quick_search = "GDP"
+                st.rerun()
+        with quick_col2:
+            if st.button("👥 Search Population", use_container_width=True, key="quick_pop"):
+                st.session_state.quick_search = "population"
+                st.rerun()
+        with quick_col3:
+            if st.button("🌡️ Search Climate", use_container_width=True, key="quick_climate"):
+                st.session_state.quick_search = "climate emissions"
+                st.rerun()
+        with quick_col4:
+            if st.button("🎓 Search Education", use_container_width=True, key="quick_edu"):
+                st.session_state.quick_search = "education"
+                st.rerun()
+        
+        if 'quick_search' in st.session_state:
+            with st.spinner(f"Searching for {st.session_state.quick_search}..."):
+                indicators, total_count = search_indicators_filtered(
+                    query=st.session_state.quick_search,
+                    themes=None,
+                    organizations=None,
+                    databases=None,
+                    limit=100
+                )
+                st.session_state.last_search_results = {'indicators': indicators, 'total_count': total_count}
+                del st.session_state.quick_search
+                st.rerun()
 
 
 # ============================================================================
@@ -1788,12 +1847,10 @@ with tab2:
 with tab3:
     st.markdown("## Query & Visualize Data")
     
-    # Check if we came from Browse Datasets
     if st.session_state.get('show_query_tab'):
         st.success(f"📊 Ready to query: {DATABASE_CATALOG.get(st.session_state.get('query_database', ''), {}).get('name', '')}")
         st.session_state.show_query_tab = False
     
-    # Pre-filled if coming from search or browse
     default_indicator = None
     default_db = st.session_state.get('query_database', 'WB_WDI')
     
@@ -1823,7 +1880,6 @@ with tab3:
         st.metric("Available Indicators", 
                  len(st.session_state.get('available_indicators', [])) if 'available_indicators' in st.session_state else 0)
     
-    # Indicator selection
     if 'available_indicators' in st.session_state and st.session_state.available_indicators:
         indicator_names = {ind['id']: ind['name'] for ind in st.session_state.available_indicators}
         
@@ -1835,7 +1891,6 @@ with tab3:
             key="query_indicator"
         )
         
-        # Show indicator details
         selected_ind_details = next((ind for ind in st.session_state.available_indicators if ind['id'] == selected_indicator_id), None)
         if selected_ind_details:
             with st.expander("ℹ️ Indicator Details", expanded=False):
@@ -1849,7 +1904,6 @@ with tab3:
         
         st.markdown("---")
         
-        # Query parameters
         st.markdown("### 🎯 Query Parameters")
         
         col1, col2, col3 = st.columns(3)
@@ -1868,7 +1922,6 @@ with tab3:
         with col3:
             year_to = st.text_input("To Year", "2023", key="query_year_to")
         
-        # Fetch button
         if st.button("🚀 Fetch Data", type="primary", use_container_width=True):
             countries_list = [c.strip().upper() for c in countries_input.split(",") if c.strip()]
             
@@ -1889,7 +1942,6 @@ with tab3:
                     else:
                         st.warning("⚠️ No data found for the selected parameters")
     
-    # Visualization section
     if st.session_state.current_data:
         st.markdown("---")
         st.markdown("## 📊 Data Visualization")
@@ -1899,7 +1951,6 @@ with tab3:
         df['TIME_PERIOD'] = df['TIME_PERIOD'].astype(str)
         df = df.dropna(subset=['OBS_VALUE'])
         
-        # Insights
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -1911,7 +1962,6 @@ with tab3:
         with col4:
             st.metric("📊 Avg Value", f"{df['OBS_VALUE'].mean():.2f}")
         
-        # Visualization tabs
         viz_tab1, viz_tab2, viz_tab3 = st.tabs(["📈 Time Series", "📊 Comparison", "📋 Data Table"])
         
         with viz_tab1:
@@ -1932,7 +1982,6 @@ with tab3:
         with viz_tab3:
             st.dataframe(df, use_container_width=True, height=500)
         
-        # Download
         st.markdown("---")
         csv = df.to_csv(index=False)
         st.download_button(
@@ -1952,21 +2001,17 @@ with tab4:
     st.markdown("## 🗂️ Database Catalog")
     st.markdown("Browse all available databases and their characteristics")
     
-    # Apply filters from sidebar
     display_databases = {}
     for db_id, info in DATABASE_CATALOG.items():
-        # Filter by organization
         if st.session_state.get('selected_organizations') and info['organization'] not in st.session_state.selected_organizations:
             continue
         
-        # Filter by theme
         if st.session_state.selected_themes:
             if not any(theme in info.get('themes', []) for theme in st.session_state.selected_themes):
                 continue
         
         display_databases[db_id] = info
     
-    # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Databases", len(st.session_state.databases))
@@ -1980,7 +2025,6 @@ with tab4:
     
     st.markdown("---")
     
-    # Featured databases
     st.markdown("### ⭐ Featured Databases")
     
     sorted_dbs = sorted(display_databases.items(), key=lambda x: x[1].get('indicator_count', 0), reverse=True)
@@ -2008,18 +2052,17 @@ with tab4:
                     st.metric("Indicators", info['indicator_count'])
                 
                 if st.button("Explore", key=f"catalog_explore_{db_id}", use_container_width=True):
-                    st.session_state.query_database = db_id
-                    st.session_state.show_query_tab = True
-                    st.info(f"✅ Selected {info['name']}. Switch to 'Query & Visualize' tab to continue.")
+                    st.session_state.exploring_database = db_id
+                    st.session_state.exploring_db_name = info['name']
+                    st.session_state.active_tab = "Browse Datasets"
+                    st.info(f"✅ Go to 'Browse Datasets' tab to see indicators.")
     
-    # All databases list
     st.markdown("---")
     st.markdown("### 📚 All Databases")
     
     if st.session_state.get('selected_organizations') or st.session_state.selected_themes:
         st.info(f"Showing {len(display_databases)} databases matching your filters")
     
-    # Create columns for database list
     cols = st.columns(5)
     for idx, db in enumerate(sorted(display_databases.keys())):
         with cols[idx % 5]:
@@ -2063,7 +2106,6 @@ with tab5:
     with col2:
         st.markdown("### 🌍 Select Countries & Period")
         
-        # Country selection
         countries_batch = st.multiselect(
             "Select countries",
             options=list(COMMON_COUNTRIES.keys()),
@@ -2075,7 +2117,6 @@ with tab5:
         if not countries_batch:
             countries_batch = []
         
-        # Year range
         year_range_batch = st.slider(
             "Year Range",
             min_value=1960,
@@ -2084,22 +2125,18 @@ with tab5:
             key="batch_year_range"
         )
         
-        # Estimated records
         if 'batch_indicators_list' in st.session_state and selected_batch_indicators and countries_batch:
             years = year_range_batch[1] - year_range_batch[0] + 1
             estimated = len(selected_batch_indicators) * len(countries_batch) * years
             st.info(f"📊 Estimated records: ~{estimated:,}")
     
-    # Start batch download
     st.markdown("---")
     
-    # Get variables from session state
     selected_batch_indicators = st.session_state.get('selected_batch_indicators', [])
     countries_batch = st.session_state.get('countries_batch', [])
     year_range_batch = st.session_state.get('year_range_batch', (2010, 2023))
     batch_db = st.session_state.get('batch_db', 'WB_WDI')
     
-    # Check if we have the necessary variables defined
     has_indicators = 'batch_indicators_list' in st.session_state and selected_batch_indicators
     has_countries = countries_batch and len(countries_batch) > 0
     
@@ -2138,7 +2175,7 @@ with tab5:
                     
                     completed += 1
                     progress_bar.progress(completed / total_queries)
-                    time.sleep(0.05)  # Rate limiting
+                    time.sleep(0.05)
             
             status_text.text("✅ Batch download complete!")
             
@@ -2156,7 +2193,6 @@ with tab5:
                 st.markdown("### 📋 Preview")
                 st.dataframe(df_batch.head(100), use_container_width=True, height=400)
                 
-                # Download
                 csv_batch = df_batch.to_csv(index=False)
                 st.download_button(
                     "📥 Download Complete Dataset (CSV)",
@@ -2179,7 +2215,7 @@ st.markdown(
     <div style='text-align: center; color: #666; font-size: 12px; padding: 20px;'>
         <p>🌍 <b>Data360 Explorer</b> | Powered by World Bank Data360 API</p>
         <p>Databases: {len(st.session_state.databases)} | Active filters: {len(st.session_state.selected_themes) + len(st.session_state.selected_databases)}</p>
-        <p style='margin-top: 10px; color: #888;'>Built with Streamlit • Dark Mode Optimized</p>
+        <p style='margin-top: 10px; color: #888;'>Made by @Gsnchez • Dark Mode Optimized</p>
     </div>
     """,
     unsafe_allow_html=True
