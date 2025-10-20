@@ -867,19 +867,48 @@ INCOME_GROUPS = {
 
 @st.cache_data(ttl=3600)
 def discover_databases():
-    """Cached database discovery"""
-    client = Data360Client()
-    result = client.search("*", top=1000)
-    databases = set()
+    """Cached database discovery - returns known list of databases"""
+    # Return the known list of 89 databases (from our discovery analysis)
+    known_databases = [
+        'BS_BTI', 'BS_SGI', 'FAO_AS', 'FH_FIW', 'GEM_APS', 'GEM_NES', 'GI_AII', 
+        'IDB_INFRALATAM', 'IFC_GB', 'ILO_EMP', 'IMF_BOP', 'IMF_BOPAGG', 'IMF_CDIR', 
+        'IMF_CDIS', 'IMF_CPIS', 'IMF_ET', 'IMF_FAS', 'IMF_FFS', 'IMF_FISCALDECENTRALIZATION', 
+        'IMF_FSI', 'IMF_FSIRE', 'IMF_GFSCOFOG', 'IMF_GFSE', 'IMF_GFSIBS', 'IMF_GFSMAB', 
+        'IMF_GFSR', 'IMF_GFSSSUC', 'IMF_IFS', 'IMF_IRFCL', 'IMF_PCTOT', 'IMF_WEO', 
+        'ITU_DH', 'ITU_GCI', 'ITU_ICT', 'JRC_EDGAR', 'OECDWBG_PMR', 'OECD_BROADBAND', 
+        'OECD_IDD', 'OECD_TIVA', 'OWID_CB', 'POLITY5_PRC', 'RWB_PFI', 'UIS_EDSTATS', 
+        'UNCTAD_DE', 'UNCTAD_MT', 'UNDRR_SFM', 'UNESCO_UIS', 'UNICEF_DW', 'UNSD_EI', 
+        'VDEM_CORE', 'WB_BID', 'WB_BOOST', 'WB_BPS', 'WB_BREADY', 'WB_CCDFS', 'WB_CCKP', 
+        'WB_CLEAR', 'WB_CPIA', 'WB_CSC', 'WB_EDSTATS', 'WB_EQOSOGI', 'WB_ES', 'WB_ESG', 
+        'WB_EWSA', 'WB_FINDEX', 'WB_FSI', 'WB_GIRG', 'WB_GS', 'WB_GTMI', 'WB_HCP', 
+        'WB_HNP', 'WB_IDS', 'WB_LPI', 'WB_MPO', 'WB_RISE', 'WB_SPI', 'WB_SSGD', 
+        'WB_THINK_HAZARD', 'WB_WBL', 'WB_WDI', 'WB_WGI', 'WB_WITS', 'WB_WWBI', 
+        'WEF_GCI', 'WEF_GCIHH', 'WEF_TTDI', 'WI_GRT', 'WJP_ROL', 'WRI_CLIMATEWATCH'
+    ]
     
-    if "value" in result:
-        for item in result["value"]:
-            if "series_description" in item:
-                db_id = item["series_description"].get("database_id")
-                if db_id:
-                    databases.add(db_id)
+    # Optionally try to discover via API as well (with fallback)
+    try:
+        client = Data360Client()
+        # Try a simple search with a common term instead of wildcard
+        result = client.search("population", top=1000)
+        
+        if "value" in result:
+            api_databases = set()
+            for item in result["value"]:
+                if "series_description" in item:
+                    db_id = item["series_description"].get("database_id")
+                    if db_id:
+                        api_databases.add(db_id)
+            
+            # Combine known databases with any newly discovered ones
+            if api_databases:
+                all_databases = set(known_databases) | api_databases
+                return sorted(list(all_databases))
+    except:
+        # If API fails, just use known databases
+        pass
     
-    return sorted(list(databases))
+    return sorted(known_databases)
 
 
 @st.cache_data(ttl=3600)
@@ -2048,7 +2077,7 @@ st.markdown(
     <div style='text-align: center; color: #666; font-size: 12px; padding: 20px;'>
         <p>🌍 <b>Data360 Explorer</b> | Powered by World Bank Data360 API</p>
         <p>Databases: {len(st.session_state.databases)} | Active filters: {len(st.session_state.selected_themes) + len(st.session_state.selected_databases)}</p>
-        <p style='margin-top: 10px; color: #888;'>Built by @Gsnchez • Dark Mode Optimized</p>
+        <p style='margin-top: 10px; color: #888;'>Built with Streamlit • Dark Mode Optimized</p>
     </div>
     """,
     unsafe_allow_html=True
