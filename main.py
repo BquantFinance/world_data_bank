@@ -1566,14 +1566,22 @@ with tab1:
     # SHOW INDICATORS FIRST IF EXPLORING A DATABASE
     # ========================================================================
     if 'exploring_database' in st.session_state and st.session_state.exploring_database:
-        st.markdown(f"## 🔍 Exploring: {st.session_state.get('exploring_db_name', 'Database')}")
+        # Big visual indicator that we're in exploration mode
+        st.markdown("""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+                <h2 style='color: white; margin: 0;'>🔍 Exploring Indicators</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"### {st.session_state.get('exploring_db_name', 'Database')}")
         
         col1, col2 = st.columns([4, 1])
         with col1:
             db_info = DATABASE_CATALOG.get(st.session_state.exploring_database, {})
             st.info(f"📊 Database: `{st.session_state.exploring_database}` | 🏢 {db_info.get('organization', 'Unknown')}")
         with col2:
-            if st.button("❌ Close", key="close_explore", use_container_width=True):
+            if st.button("❌ Close Explorer", key="close_explore", use_container_width=True, type="secondary"):
                 del st.session_state.exploring_database
                 del st.session_state.exploring_db_name
                 st.rerun()
@@ -1638,8 +1646,11 @@ with tab1:
                             if st.button("📊 Query", key=f"explore_query_{ind['id']}", use_container_width=True):
                                 st.session_state.selected_indicator = ind
                                 st.session_state.query_database = st.session_state.exploring_database
-                                st.session_state.active_tab = "Query & Visualize"
-                                st.success(f"✅ Selected indicator. Go to 'Query & Visualize' tab.")
+                                # Show a toast message
+                                st.toast(f"✅ Selected: {ind['name'][:50]}...", icon="✅")
+                                st.info("💡 **Next step:** Go to the '📊 Query & Visualize' tab to fetch and visualize this data!")
+                                # Scroll indicator to top by rerunning
+                                time.sleep(1)
                         
                         st.markdown("---")
             else:
@@ -1654,8 +1665,11 @@ with tab1:
                 """)
         
         st.markdown("---")
-        st.markdown("### 📚 Browse Other Databases")
-        st.markdown("Select a different database to explore its indicators:")
+        st.markdown("""
+            <div style='text-align: center; margin: 30px 0;'>
+                <h3 style='color: #888;'>⬇️ Scroll down to browse other databases ⬇️</h3>
+            </div>
+        """, unsafe_allow_html=True)
         st.markdown("---")
     else:
         st.markdown("Explore available datasets with detailed information")
@@ -1974,51 +1988,110 @@ with tab2:
 with tab3:
     st.markdown("## Query & Visualize Data")
     
-    if st.session_state.get('show_query_tab'):
-        st.success(f"📊 Ready to query: {DATABASE_CATALOG.get(st.session_state.get('query_database', ''), {}).get('name', '')}")
-        st.session_state.show_query_tab = False
-    
-    default_indicator = None
-    default_db = st.session_state.get('query_database', 'WB_WDI')
-    
+    # Auto-load indicators if coming from Browse/Explore with a selection
     if 'selected_indicator' in st.session_state:
         ind = st.session_state.selected_indicator
-        default_indicator = ind['id']
-        default_db = ind['database_id']
-        st.info(f"📊 Selected: **{ind['name']}**")
+        current_db = ind['database_id']
+        
+        # Auto-load indicators if not already loaded for this database
+        if 'available_indicators' not in st.session_state or st.session_state.get('query_database') != current_db:
+            with st.spinner(f"Loading indicators from {DATABASE_CATALOG.get(current_db, {}).get('name', current_db)}..."):
+                st.session_state.available_indicators = get_indicators_with_metadata(current_db)
+                st.session_state.query_database = current_db
+                st.session_state.last_selected_db = current_db
+        
+        # Show selection banner
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            st.success(f"✅ Pre-selected: **{ind['name']}**")
+        with col2:
+            if st.button("❌", key="clear_selection", help="Clear selection"):
+                del st.session_state.selected_indicator
+                st.rerun()
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
+        # Get current database selection
+        current_db = st.session_state.get('query_database', 'WB_WDI')
+        
         selected_db = st.selectbox(
             "Database",
             st.session_state.databases,
-            index=st.session_state.databases.index(default_db) if default_db in st.session_state.databases else 0,
-            key="query_db"
+            index=st.session_state.databases.index(current_db) if current_db in st.session_state.databases else 0,
+            key="query_db_select",
+            help="Select a database to query"
         )
+        
+        # Detect database change
+        if 'last_selected_db' not in st.session_state:
+            st.session_state.last_selected_db = selected_db
+        
+        if selected_db != st.session_state.last_selected_db:
+            # Database changed - clear everything
+            st.session_state.last_selected_db = selected_db
+            st.session_state.query_database = selected_db
+            if 'available_indicators' in st.session_state:
+                del st.session_state.available_indicators
+            if 'selected_indicator' in st.session_state:
+                del st.session_state.selected_indicator
+            st.info(f"🔄 Database changed to {DATABASE_CATALOG.get(selected_db, {}).get('name', selected_db)}. Click 'Load Indicators' to see available indicators.")
     
     with col2:
-        if st.button("📋 Load Indicators", use_container_width=True):
-            with st.spinner("Loading indicators..."):
+        if st.button("📋 Load Indicators", use_container_width=True, type="primary"):
+            with st.spinner(f"Loading indicators from {DATABASE_CATALOG.get(selected_db, {}).get('name', selected_db)}..."):
+                # Clear old selection when loading new indicators
+                if 'selected_indicator' in st.session_state:
+                    del st.session_state.selected_indicator
+                
                 st.session_state.available_indicators = get_indicators_with_metadata(selected_db)
-                st.success(f"Loaded {len(st.session_state.available_indicators)} indicators")
+                st.session_state.query_database = selected_db
+                st.success(f"✅ Loaded {len(st.session_state.available_indicators)} indicators")
+                time.sleep(0.5)
+                st.rerun()  # Force refresh to update dropdown
     
     with col3:
-        st.metric("Available Indicators", 
-                 len(st.session_state.get('available_indicators', [])) if 'available_indicators' in st.session_state else 0)
+        indicator_count = len(st.session_state.get('available_indicators', []))
+        st.metric("Available", indicator_count if indicator_count > 0 else "Click Load")
     
     if 'available_indicators' in st.session_state and st.session_state.available_indicators:
         indicator_names = {ind['id']: ind['name'] for ind in st.session_state.available_indicators}
+        
+        # Determine default selection
+        default_indicator = None
+        default_index = 0
+        
+        if 'selected_indicator' in st.session_state:
+            ind = st.session_state.selected_indicator
+            # Only use pre-selected if it's from the same database and exists in loaded indicators
+            if ind['database_id'] == selected_db and ind['id'] in indicator_names:
+                default_indicator = ind['id']
+                default_index = list(indicator_names.keys()).index(default_indicator)
         
         selected_indicator_id = st.selectbox(
             "Select Indicator",
             options=list(indicator_names.keys()),
             format_func=lambda x: f"{indicator_names[x]} ({x})",
-            index=list(indicator_names.keys()).index(default_indicator) if default_indicator in indicator_names else 0,
-            key="query_indicator"
+            index=default_index,
+            key="query_indicator_select",
+            help="Choose an indicator to query"
         )
         
+        # Update session state with current selection
         selected_ind_details = next((ind for ind in st.session_state.available_indicators if ind['id'] == selected_indicator_id), None)
+    else:
+        # No indicators loaded yet
+        st.warning("⚠️ No indicators loaded. Click '📋 Load Indicators' button above to get started.")
+        st.info("""
+        **Quick start:**
+        1. Select a database from the dropdown above
+        2. Click the '📋 Load Indicators' button
+        3. Choose an indicator from the list that appears
+        4. Set your query parameters and click 'Fetch Data'
+        
+        **Or:** Go to the '🗂️ Browse Datasets' tab and click 'Explore' on any database to browse indicators visually.
+        """)
+        selected_ind_details = None
         if selected_ind_details:
             with st.expander("ℹ️ Indicator Details", expanded=False):
                 st.markdown(f"**Name:** {selected_ind_details['name']}")
@@ -2345,7 +2418,7 @@ st.markdown(
     <div style='text-align: center; color: #666; font-size: 12px; padding: 20px;'>
         <p>🌍 <b>Data360 Explorer</b> | Powered by World Bank Data360 API</p>
         <p>Databases: {len(st.session_state.databases)} | Active filters: {len(st.session_state.selected_themes) + len(st.session_state.selected_databases)}</p>
-        <p style='margin-top: 10px; color: #888;'>Built with Streamlit • Dark Mode Optimized</p>
+        <p style='margin-top: 10px; color: #888;'>Made by @Gsnchez</p>
     </div>
     """,
     unsafe_allow_html=True
