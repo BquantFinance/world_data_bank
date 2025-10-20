@@ -1600,7 +1600,7 @@ with tab1:
             col1, col2 = st.columns([5, 1])
             
             with col1:
-                st.markdown(f"### 🗂️ [{info['name']}](javascript:void(0))")
+                st.markdown(f"### 🗂️ {info['name']}")
                 
                 # Metadata
                 st.caption(f"**Last updated:** Recently | **{info.get('indicator_count', 'N/A')}** Indicators")
@@ -1991,6 +1991,8 @@ with tab5:
                 max_selections=10,
                 key="batch_indicators"
             )
+        else:
+            selected_batch_indicators = []
     
     with col2:
         st.markdown("### 🌍 Select Countries & Period")
@@ -2004,6 +2006,9 @@ with tab5:
             key="batch_countries_multi"
         )
         
+        if not countries_batch:
+            countries_batch = []
+        
         # Year range
         year_range_batch = st.slider(
             "Year Range",
@@ -2014,7 +2019,7 @@ with tab5:
         )
         
         # Estimated records
-        if selected_batch_indicators and countries_batch:
+        if 'batch_indicators_list' in st.session_state and selected_batch_indicators and countries_batch:
             years = year_range_batch[1] - year_range_batch[0] + 1
             estimated = len(selected_batch_indicators) * len(countries_batch) * years
             st.info(f"📊 Estimated records: ~{estimated:,}")
@@ -2022,10 +2027,14 @@ with tab5:
     # Start batch download
     st.markdown("---")
     
+    # Check if we have the necessary variables defined
+    has_indicators = 'batch_indicators_list' in st.session_state and selected_batch_indicators
+    has_countries = countries_batch and len(countries_batch) > 0
+    
     if st.button("🚀 Start Batch Download", type="primary", use_container_width=True):
-        if not selected_batch_indicators:
+        if not has_indicators:
             st.error("Please select at least one indicator")
-        elif not countries_batch:
+        elif not has_countries:
             st.error("Please select at least one country")
         else:
             progress_bar = st.progress(0)
@@ -2035,8 +2044,10 @@ with tab5:
             total_queries = len(selected_batch_indicators) * len(countries_batch)
             completed = 0
             
+            indicator_options_map = {ind['id']: ind['name'] for ind in st.session_state.batch_indicators_list}
+            
             for indicator in selected_batch_indicators:
-                indicator_name = indicator_options.get(indicator, indicator)[:30]
+                indicator_name = indicator_options_map.get(indicator, indicator)[:30]
                 
                 for country in countries_batch:
                     status_text.text(f"⏳ Fetching: {indicator_name}... for {COMMON_COUNTRIES.get(country, country)}")
