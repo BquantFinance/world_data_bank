@@ -1251,6 +1251,37 @@ st.markdown("""
         color: #ffffff;
     }
     
+    /* Filter section cards */
+    .filter-card {
+        background: linear-gradient(135deg, #1e2130 0%, #262b3d 100%);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #2d3142;
+        margin: 10px 0;
+    }
+    
+    /* Multiselect styling */
+    .stMultiSelect > div > div {
+        background: #1e2130;
+        border: 1px solid #2d3142;
+        border-radius: 6px;
+    }
+    
+    /* Search input in main area */
+    div[data-testid="stTextInput"] > div > div > input {
+        background: #1e2130;
+        border: 1px solid #4a9eff;
+        border-radius: 8px;
+        padding: 12px;
+        color: #ffffff;
+        font-size: 16px;
+    }
+    
+    div[data-testid="stTextInput"] > div > div > input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.2);
+    }
+    
     /* Tags/badges */
     .tag {
         display: inline-block;
@@ -1320,7 +1351,17 @@ if 'current_data' not in st.session_state:
 
 
 # ============================================================================
-# HEADER
+# INITIALIZATION
+# ============================================================================
+
+# Load databases
+if st.session_state.databases is None:
+    with st.spinner("🔄 Loading databases..."):
+        st.session_state.databases = discover_databases()
+
+
+# ============================================================================
+# HEADER & FILTERS
 # ============================================================================
 
 col1, col2, col3 = st.columns([1, 3, 1])
@@ -1331,149 +1372,127 @@ with col2:
                 🌍 Data360 Explorer
             </h1>
             <p style='color: #888; font-size: 1.1rem; margin-top: 10px;'>
-                Discover insights from 89 global databases • 10,000+ indicators
+                Discover insights from 89 global databases • 13,607 indicators
             </p>
         </div>
     """, unsafe_allow_html=True)
 
-
 # ============================================================================
-# SIDEBAR - ADVANCED FILTERS
+# BEAUTIFUL FILTER SECTION
 # ============================================================================
 
-with st.sidebar:
-    st.markdown("## 🔍 Filters")
-    
-    # Load databases
-    if st.session_state.databases is None:
-        with st.spinner("Loading databases..."):
-            st.session_state.databases = discover_databases()
-    
-    # Clear filters
-    if st.button("🔄 Clear All Filters", use_container_width=True):
-        st.session_state.selected_themes = []
-        st.session_state.selected_databases = []
-        st.session_state.selected_organizations = []
-        st.rerun()
-    
-    st.markdown("---")
-    
+st.markdown("""
+    <div style='text-align: center; margin: 30px 0;'>
+        <h2 style='color: #4a9eff; font-weight: 300; letter-spacing: 1px;'>🎯 Filters & Search</h2>
+    </div>
+""", unsafe_allow_html=True)
+
+# Create elegant filter layout with better spacing
+st.markdown("<div style='margin: 20px 0;'>", unsafe_allow_html=True)
+filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([3, 2, 2, 1])
+
+with filter_col1:
+    st.markdown("#### 🔍 Quick Search")
+    main_search = st.text_input(
+        "Search datasets or indicators",
+        placeholder="e.g., GDP, education, climate change...",
+        key="main_search_input",
+        label_visibility="collapsed"
+    )
+
+with filter_col2:
+    st.markdown("#### 📚 Themes")
     # Count databases by theme
     theme_counts = defaultdict(int)
     for db_id, info in DATABASE_CATALOG.items():
         for theme in info.get("themes", []):
             theme_counts[theme] += 1
     
+    theme_options = sorted(theme_counts.keys())
+    selected_themes_new = st.multiselect(
+        "Select themes",
+        options=theme_options,
+        default=st.session_state.selected_themes,
+        format_func=lambda x: f"{x} ({theme_counts[x]})",
+        key="themes_multiselect",
+        label_visibility="collapsed"
+    )
+    st.session_state.selected_themes = selected_themes_new
+
+with filter_col3:
+    st.markdown("#### 🏢 Organizations")
     # Count databases by organization
     org_counts = defaultdict(int)
     for db_id, info in DATABASE_CATALOG.items():
         org = info.get("organization", "Unknown")
         org_counts[org] += 1
     
-    # Themes & Topics Filter
-    with st.expander("📚 **Themes & Topics**", expanded=True):
-        theme_search = st.text_input(
-            "Search themes",
-            placeholder="Search...",
-            key="theme_search",
-            label_visibility="collapsed"
-        )
-        
-        st.markdown("##### Select Themes")
-        
-        # Filter themes based on search
-        available_themes = sorted(theme_counts.keys())
-        if theme_search:
-            available_themes = [t for t in available_themes if theme_search.lower() in t.lower()]
-        
-        # Show themes with counts
-        for theme in available_themes:
-            count = theme_counts[theme]
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                if st.checkbox(theme, key=f"theme_{theme}"):
-                    if theme not in st.session_state.selected_themes:
-                        st.session_state.selected_themes.append(theme)
-                elif theme in st.session_state.selected_themes:
-                    st.session_state.selected_themes.remove(theme)
-            with col2:
-                st.caption(f"({count})")
-    
-    # Source Organizations Filter
-    with st.expander("🏢 **Source Organizations**", expanded=True):
-        org_search = st.text_input(
-            "Search organizations",
-            placeholder="Search...",
-            key="org_search",
-            label_visibility="collapsed"
-        )
-        
-        st.markdown("##### Select Organizations")
-        
-        # Filter organizations based on search
-        available_orgs = sorted(org_counts.keys())
-        if org_search:
-            available_orgs = [o for o in available_orgs if org_search.lower() in o.lower()]
-        
-        # Initialize selected_organizations if not exists
-        if 'selected_organizations' not in st.session_state:
-            st.session_state.selected_organizations = []
-        
-        # Show organizations with counts
-        for org in available_orgs:
-            count = org_counts[org]
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                if st.checkbox(org, key=f"org_{org}"):
-                    if org not in st.session_state.selected_organizations:
-                        st.session_state.selected_organizations.append(org)
-                elif org in st.session_state.selected_organizations:
-                    st.session_state.selected_organizations.remove(org)
-            with col2:
-                st.caption(f"({count})")
-    
-    # Countries Filter
-    with st.expander("🌐 **Countries**", expanded=False):
-        st.session_state.selected_countries = st.multiselect(
-            "Select countries",
-            options=list(COMMON_COUNTRIES.keys()),
-            format_func=lambda x: f"{COMMON_COUNTRIES[x]} ({x})",
-            key="country_filter"
-        )
-    
-    # Time Period Filter
-    with st.expander("📅 **Time Period**", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.session_state.year_from = st.number_input(
-                "From",
-                min_value=1960,
-                max_value=2025,
-                value=2010,
-                key="year_from_filter"
-            )
-        with col2:
-            st.session_state.year_to = st.number_input(
-                "To",
-                min_value=1960,
-                max_value=2025,
-                value=2023,
-                key="year_to_filter"
-            )
-    
-    st.markdown("---")
-    
-    # Stats
-    st.markdown("### 📊 Quick Stats")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Databases", len(st.session_state.databases))
-    with col2:
-        active_filters = (
-            len(st.session_state.selected_themes) + 
-            len(st.session_state.get('selected_organizations', []))
-        )
-        st.metric("Active Filters", active_filters)
+    org_options = sorted(org_counts.keys())
+    selected_orgs_new = st.multiselect(
+        "Select organizations",
+        options=org_options,
+        default=st.session_state.get('selected_organizations', []),
+        format_func=lambda x: f"{x} ({org_counts[x]})",
+        key="orgs_multiselect",
+        label_visibility="collapsed"
+    )
+    st.session_state.selected_organizations = selected_orgs_new
+
+with filter_col4:
+    st.markdown("#### 🔄")
+    if st.button("Clear All", use_container_width=True, key="clear_filters_main"):
+        st.session_state.selected_themes = []
+        st.session_state.selected_organizations = []
+        st.rerun()
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Active filters display
+if st.session_state.selected_themes or st.session_state.get('selected_organizations'):
+    st.markdown("<div style='margin: 15px 0;'>", unsafe_allow_html=True)
+    st.markdown("**🏷️ Active Filters:**")
+    filter_html = ""
+    for theme in st.session_state.selected_themes:
+        filter_html += f'<span class="tag">{theme}</span>'
+    for org in st.session_state.get('selected_organizations', []):
+        filter_html += f'<span class="database-badge">{org}</span>'
+    st.markdown(filter_html, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# Stats row with elegant design
+st.markdown("""
+    <div style='text-align: center; margin: 30px 0 20px 0;'>
+        <div style='height: 2px; background: linear-gradient(90deg, transparent, #4a9eff, transparent);'></div>
+    </div>
+""", unsafe_allow_html=True)
+stat_col1, stat_col2, stat_col3, stat_col4, stat_col5 = st.columns(5)
+with stat_col1:
+    st.metric("📊 Databases", len(st.session_state.databases))
+with stat_col2:
+    st.metric("📈 Indicators", "13,607")
+with stat_col3:
+    st.metric("🏢 Organizations", "27")
+with stat_col4:
+    active_filters = len(st.session_state.selected_themes) + len(st.session_state.get('selected_organizations', []))
+    st.metric("🎯 Active Filters", active_filters)
+with stat_col5:
+    # Count filtered databases
+    filtered_count = 0
+    for db_id, info in DATABASE_CATALOG.items():
+        if st.session_state.get('selected_organizations') and info['organization'] not in st.session_state.selected_organizations:
+            continue
+        if st.session_state.selected_themes:
+            if not any(theme in info.get('themes', []) for theme in st.session_state.selected_themes):
+                continue
+        filtered_count += 1
+    st.metric("📁 Showing", filtered_count)
+
+# Bottom separator
+st.markdown("""
+    <div style='text-align: center; margin: 20px 0 30px 0;'>
+        <div style='height: 2px; background: linear-gradient(90deg, transparent, #667eea, transparent);'></div>
+    </div>
+""", unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -1605,7 +1624,7 @@ with tab1:
                 st.markdown(f"**{info.get('indicator_count', 'N/A')}**")
                 st.caption("INDICATORS")
                 
-                if st.button("📈 Explore", key=f"explore_{db_id}", use_container_width=True):
+                if st.button("📈 Explore", key=f"dataset_explore_{db_id}", use_container_width=True):
                     st.session_state.selected_db_explore = db_id
                     st.session_state.active_tab = 2
                     st.rerun()
@@ -1923,7 +1942,7 @@ with tab4:
                 if info.get('indicator_count'):
                     st.metric("Indicators", info['indicator_count'])
                 
-                if st.button("Explore", key=f"explore_{db_id}", use_container_width=True):
+                if st.button("Explore", key=f"catalog_explore_{db_id}", use_container_width=True):
                     st.session_state.selected_databases = [db_id]
                     st.rerun()
     
