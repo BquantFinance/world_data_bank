@@ -1484,118 +1484,220 @@ with tab2:
 with tab3:
     st.markdown("## Query & Visualize Data")
     
-    if 'selected_indicator' in st.session_state:
+    # Check if we have a pre-selected indicator
+    has_preselection = 'selected_indicator' in st.session_state
+    
+    if has_preselection:
+        # ==================================================================
+        # FAST PATH: User came from Browse/Explore with indicator selected
+        # ==================================================================
         ind = st.session_state.selected_indicator
-        current_db = ind['database_id']
         
-        if 'available_indicators' not in st.session_state or st.session_state.get('query_database') != current_db:
-            with st.spinner(f"Loading..."):
-                st.session_state.available_indicators = get_indicators_with_metadata(current_db)
-                st.session_state.query_database = current_db
-                st.session_state.last_selected_db = current_db
-        
-        if not st.session_state.get('indicators_loaded_once', False):
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                st.success(f"✅ Pre-selected: **{ind['name']}**")
-            with col2:
-                if st.button("❌", key="clear_selection"):
-                    del st.session_state.selected_indicator
-                    st.rerun()
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        current_db = st.session_state.get('query_database', 'WB_WDI')
-        selected_db = st.selectbox("Database", st.session_state.databases,
-                                   index=st.session_state.databases.index(current_db) if current_db in st.session_state.databases else 0,
-                                   key="query_db_select")
-        
-        if 'last_selected_db' not in st.session_state:
-            st.session_state.last_selected_db = selected_db
-        
-        if selected_db != st.session_state.last_selected_db:
-            st.session_state.last_selected_db = selected_db
-            st.session_state.query_database = selected_db
-            for key in ['available_indicators', 'selected_indicator', 'indicators_loaded_once']:
-                st.session_state.pop(key, None)
-    
-    with col2:
-        if st.button("📋 Load Indicators", use_container_width=True, type="primary"):
-            with st.spinner("Loading..."):
-                st.session_state.pop('selected_indicator', None)
-                st.session_state.indicators_loaded_once = True
-                st.session_state.available_indicators = get_indicators_with_metadata(selected_db)
-                st.session_state.query_database = selected_db
-                st.success(f"✅ Loaded {len(st.session_state.available_indicators)} indicators")
-                time.sleep(0.5)
+        # Show what's selected
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            st.success(f"✅ **Selected:** {ind['name']}")
+            st.caption(f"📊 Database: {DATABASE_CATALOG.get(ind['database_id'], {}).get('name', ind['database_id'])} | 🆔 `{ind['id']}`")
+        with col2:
+            if st.button("🔄 Change", key="change_indicator", use_container_width=True, help="Select a different indicator"):
+                del st.session_state.selected_indicator
                 st.rerun()
+        
+        # Show indicator details
+        with st.expander("ℹ️ Indicator Details", expanded=False):
+            st.markdown(f"**Full Name:** {ind['name']}")
+            st.markdown(f"**ID:** `{ind['id']}`")
+            if ind.get('description'):
+                st.markdown(f"**Description:** {ind['description']}")
+            if ind.get('topics'):
+                topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'] if t])
+                st.markdown(topics_html, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("### 🎯 Set Query Parameters")
+        
+        # Query parameters
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            countries_input = st.text_input("Countries (comma-separated)", value="USA,GBR,DEU,FRA,JPN",
+                                          help="Use ISO 3-letter codes", key="query_countries")
+        with col2:
+            year_from = st.text_input("From Year", "2010", key="query_year_from")
+        with col3:
+            year_to = st.text_input("To Year", "2023", key="query_year_to")
+        
+        # Fetch button
+        if st.button("🚀 Fetch Data", type="primary", use_container_width=True, key="fetch_preselected"):
+            countries_list = [c.strip().upper() for c in countries_input.split(",") if c.strip()]
+            
+            if countries_list:
+                with st.spinner(f"Fetching data for {ind['name'][:50]}..."):
+                    data = fetch_data_cached(ind['database_id'], ind['id'], countries_list, year_from, year_to)
+                    
+                    if data and len(data) > 0:
+                        st.session_state.current_data = data
+                        st.session_state.current_indicator_name = ind['name']
+                        st.session_state.current_indicator_id = ind['id']
+                        st.success(f"✅ Fetched {len(data)} records!")
+                        st.balloons()
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ No data found. Try different countries or years.")
+            else:
+                st.error("❌ Please enter at least one country code")
     
-    with col3:
-        indicator_count = len(st.session_state.get('available_indicators', []))
-        st.metric("Available", indicator_count if indicator_count > 0 else "Click Load")
-    
-    if 'available_indicators' in st.session_state and st.session_state.available_indicators:
-        indicator_names = {ind['id']: ind['name'] for ind in st.session_state.available_indicators}
-        
-        default_index = 0
-        if 'selected_indicator' in st.session_state:
-            ind = st.session_state.selected_indicator
-            if ind['database_id'] == selected_db and ind['id'] in indicator_names:
-                default_index = list(indicator_names.keys()).index(ind['id'])
-        
-        selected_indicator_id = st.selectbox("Select Indicator", options=list(indicator_names.keys()),
-                                            format_func=lambda x: f"{indicator_names[x][:90]}{'...' if len(indicator_names[x]) > 90 else ''}",
-                                            index=default_index, key="query_indicator_select")
-        
-        if 'selected_indicator' in st.session_state:
-            if selected_indicator_id != st.session_state.selected_indicator.get('id'):
-                st.session_state.indicators_loaded_once = True
-        
-        selected_ind_details = next((ind for ind in st.session_state.available_indicators if ind['id'] == selected_indicator_id), None)
-        
-        if selected_ind_details:
-            with st.expander("ℹ️ Details", expanded=False):
-                st.markdown(f"**Name:** {selected_ind_details['name']}")
-                st.markdown(f"**ID:** `{selected_ind_details['id']}`")
-                if selected_ind_details['description']:
-                    st.markdown(f"**Description:** {selected_ind_details['description']}")
-            
-            st.markdown("---")
-            st.markdown("### 🎯 Query Parameters")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                countries_input = st.text_input("Countries", value="USA,GBR,DEU,FRA,JPN", key="query_countries")
-            with col2:
-                year_from = st.text_input("From Year", "2010", key="query_year_from")
-            with col3:
-                year_to = st.text_input("To Year", "2023", key="query_year_to")
-            
-            if st.button("🚀 Fetch Data", type="primary", use_container_width=True):
-                countries_list = [c.strip().upper() for c in countries_input.split(",") if c.strip()]
-                
-                if countries_list:
-                    with st.spinner("Fetching..."):
-                        data = fetch_data_cached(selected_db, selected_indicator_id, countries_list, year_from, year_to)
-                        
-                        if data and len(data) > 0:
-                            st.session_state.current_data = data
-                            st.session_state.current_indicator_name = indicator_names[selected_indicator_id]
-                            st.session_state.current_indicator_id = selected_indicator_id
-                            st.success(f"✅ Fetched {len(data)} records!")
-                            st.balloons()
-                            time.sleep(0.5)
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ No data found")
-                else:
-                    st.error("❌ Enter at least one country")
     else:
-        st.info("👋 Select database and click 'Load Indicators'")
+        # ==================================================================
+        # MANUAL PATH: User is selecting indicator manually
+        # ==================================================================
+        st.info("💡 **Quick Start:** Go to the '🗂️ Browse Datasets' tab and click 'Explore' on any database to browse indicators visually!")
+        
+        st.markdown("### Or select manually:")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            current_db = st.session_state.get('query_database', 'WB_WDI')
+            selected_db = st.selectbox("Database", st.session_state.databases,
+                                       index=st.session_state.databases.index(current_db) if current_db in st.session_state.databases else 0,
+                                       key="query_db_select")
+            
+            if 'last_selected_db' not in st.session_state:
+                st.session_state.last_selected_db = selected_db
+            
+            if selected_db != st.session_state.last_selected_db:
+                st.session_state.last_selected_db = selected_db
+                st.session_state.query_database = selected_db
+                st.session_state.pop('available_indicators', None)
+        
+        with col2:
+            if st.button("📋 Load Indicators", use_container_width=True, type="primary"):
+                with st.spinner("Loading..."):
+                    st.session_state.available_indicators = get_indicators_with_metadata(selected_db)
+                    st.session_state.query_database = selected_db
+                    st.success(f"✅ Loaded {len(st.session_state.available_indicators)} indicators")
+                    time.sleep(0.3)
+                    st.rerun()
+        
+        with col3:
+            indicator_count = len(st.session_state.get('available_indicators', []))
+            st.metric("Available", indicator_count if indicator_count > 0 else "Click Load")
+        
+        # Show indicator selector if loaded
+        if 'available_indicators' in st.session_state and st.session_state.available_indicators:
+            st.markdown("---")
+            
+            indicator_names = {ind['id']: ind['name'] for ind in st.session_state.available_indicators}
+            
+            selected_indicator_id = st.selectbox("Select Indicator",
+                                                options=list(indicator_names.keys()),
+                                                format_func=lambda x: f"{indicator_names[x][:90]}{'...' if len(indicator_names[x]) > 90 else ''}",
+                                                key="query_indicator_select")
+            
+            selected_ind_details = next((ind for ind in st.session_state.available_indicators if ind['id'] == selected_indicator_id), None)
+            
+            if selected_ind_details:
+                with st.expander("ℹ️ Indicator Details", expanded=False):
+                    st.markdown(f"**Name:** {selected_ind_details['name']}")
+                    st.markdown(f"**ID:** `{selected_ind_details['id']}`")
+                    if selected_ind_details['description']:
+                        st.markdown(f"**Description:** {selected_ind_details['description']}")
+                
+                st.markdown("---")
+                st.markdown("### 🎯 Query Parameters")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    countries_input = st.text_input("Countries", value="USA,GBR,DEU,FRA,JPN", key="query_countries_manual")
+                with col2:
+                    year_from = st.text_input("From Year", "2010", key="query_year_from_manual")
+                with col3:
+                    year_to = st.text_input("To Year", "2023", key="query_year_to_manual")
+                
+                if st.button("🚀 Fetch Data", type="primary", use_container_width=True, key="fetch_manual"):
+                    countries_list = [c.strip().upper() for c in countries_input.split(",") if c.strip()]
+                    
+                    if countries_list:
+                        with st.spinner("Fetching..."):
+                            data = fetch_data_cached(selected_db, selected_indicator_id, countries_list, year_from, year_to)
+                            
+                            if data and len(data) > 0:
+                                st.session_state.current_data = data
+                                st.session_state.current_indicator_name = indicator_names[selected_indicator_id]
+                                st.session_state.current_indicator_id = selected_indicator_id
+                                st.success(f"✅ Fetched {len(data)} records!")
+                                st.balloons()
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.warning("⚠️ No data found")
+                    else:
+                        st.error("❌ Enter at least one country")
     
-    # VISUALIZATIONS
+    # ==================================================================
+    # VISUALIZATIONS - Show if we have data
+    # ==================================================================
     if 'current_data' in st.session_state and st.session_state.current_data:
+        st.markdown("---")
+        st.markdown("## 📊 Data Visualization")
+        
+        indicator_name = st.session_state.get('current_indicator_name', 'Selected Indicator')
+        df = pd.DataFrame(st.session_state.current_data)
+        
+        if len(df) == 0:
+            st.warning("⚠️ No records returned")
+        else:
+            df['OBS_VALUE'] = pd.to_numeric(df['OBS_VALUE'], errors='coerce')
+            df['TIME_PERIOD'] = df['TIME_PERIOD'].astype(str)
+            df = df.dropna(subset=['OBS_VALUE'])
+            
+            if len(df) == 0:
+                st.warning("⚠️ No valid numeric data found")
+            else:
+                # Data summary
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("📈 Total Records", f"{len(df):,}")
+                with col2:
+                    st.metric("🌍 Countries", df['REF_AREA'].nunique())
+                with col3:
+                    st.metric("📅 Time Range", f"{df['TIME_PERIOD'].min()}-{df['TIME_PERIOD'].max()}")
+                with col4:
+                    st.metric("📊 Avg Value", f"{df['OBS_VALUE'].mean():.2f}")
+                
+                # Visualization tabs
+                viz_tab1, viz_tab2, viz_tab3 = st.tabs(["📈 Time Series", "📊 Comparison", "📋 Data Table"])
+                
+                with viz_tab1:
+                    fig = create_time_series_plot(df, "Time Series Analysis", indicator_name)
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with viz_tab2:
+                    available_years = sorted(df['TIME_PERIOD'].unique(), reverse=True)
+                    if len(available_years) > 0:
+                        selected_year = st.selectbox("Select Year", available_years, key="comparison_year")
+                        fig = create_comparison_chart(df, selected_year, "Country Comparison")
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.warning("No year data available")
+                
+                with viz_tab3:
+                    st.dataframe(df, use_container_width=True, height=500)
+                
+                # Download button
+                st.markdown("---")
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    "📥 Download Data (CSV)",
+                    csv,
+                    f"data360_{st.session_state.get('current_indicator_id', 'data')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+
+
+# TAB 4: DATABASE CATALOG
         st.markdown("---")
         st.markdown("## 📊 Data Visualization")
         
@@ -1643,7 +1745,6 @@ with tab3:
                 st.download_button("📥 Download CSV", csv,
                                  f"data360_{st.session_state.get('current_indicator_id', 'data')}_{datetime.now().strftime('%Y%m%d')}.csv",
                                  "text/csv", use_container_width=True)
-
 
 
 
