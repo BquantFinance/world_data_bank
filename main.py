@@ -1,6 +1,7 @@
 """
 World Bank Data360 Explorer - Complete Single-File Streamlit App
 Dark mode, elegant, minimalist interface for exploring global data
+FULLY FIXED VERSION - All issues resolved
 """
 
 import streamlit as st
@@ -32,7 +33,6 @@ class Data360Client:
         """Search Data360 - avoids wildcard searches"""
         url = f"{self.BASE_URL}/data360/searchv2"
         
-        # Replace wildcard or empty search with a common term
         if not query or query.strip() == "" or query == "*":
             query = "GDP"
         
@@ -54,7 +54,6 @@ class Data360Client:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            # Return empty result on error but log it
             print(f"Search API Error: {str(e)}")
             if hasattr(e, 'response') and e.response is not None:
                 print(f"Response status: {e.response.status_code}")
@@ -133,9 +132,114 @@ class Data360Client:
 
 
 # ============================================================================
-# DATABASE CATALOG & CLASSIFICATION
-# Complete catalog with all 87 databases - Auto-generated
-# Total Indicators: 13,607
+# ABBREVIATION DECODER FOR READABLE NAMES
+# ============================================================================
+
+ABBREVIATION_DECODER = {
+    # IMF Balance of Payments
+    "BOP": "Balance of Payments",
+    "BP6": "BPM6",
+    "BXSTR": "External Debt",
+    "BXSTV": "External Debt Value",
+    "SPE": "Special",
+    "USD": "US Dollars",
+    "EUR": "Euros",
+    "GBP": "British Pounds",
+    "JPY": "Japanese Yen",
+    "XDC": "SDR (Special Drawing Rights)",
+    "IARMGB": "Interest Arrears",
+    "BFOCDLOF": "Foreign Direct Investment",
+    "BMGN": "Monetary Gold",
+    "BXSTVBS": "External Debt by Sector",
+    "BIPIOPC": "Portfolio Investment",
+    "BFOLN": "Financial Derivatives",
+    "BFOINLG": "Foreign Investment",
+    "BFQINLG": "Financial Account",
+    "BFQIN": "Financial Account Inflows",
+    
+    # World Bank
+    "WDI": "World Development Indicators",
+    "AG": "Agriculture",
+    "CON": "Consumption",
+    "FERT": "Fertilizer",
+    "ZS": "% of",
+    "NY": "National Accounts",
+    "GDP": "Gross Domestic Product",
+    "MKTP": "Market Prices",
+    "CD": "Current USD",
+    "PCAP": "Per Capita",
+    "KD": "Constant USD",
+    "SP": "Population",
+    "POP": "Population",
+    "TOTL": "Total",
+    "FP": "Prices",
+    "CPI": "Consumer Price Index",
+    "SL": "Labor",
+    "UEM": "Unemployment",
+    "SE": "Education",
+    "PRM": "Primary",
+    "CMPT": "Completion Rate",
+    "FE": "Female",
+    "MA": "Male",
+    "SH": "Health",
+    "DYN": "Dynamics",
+    "LE00": "Life Expectancy",
+    "IN": "Indicator",
+    
+    # Common terms
+    "PCT": "Percent",
+    "TOT": "Total",
+    "AVG": "Average",
+    "IDX": "Index",
+    "IND": "Industry",
+    "MFG": "Manufacturing",
+    "SVC": "Services",
+    "GOVT": "Government",
+    "EXP": "Exports",
+    "IMP": "Imports",
+    "INV": "Investment",
+    "FDI": "Foreign Direct Investment",
+    "GNI": "Gross National Income",
+    "PPP": "Purchasing Power Parity",
+    
+    # Entrepreneurship (GEM)
+    "APS": "Adult Population Survey",
+    "NES": "National Expert Survey",
+    "TEA": "Total Entrepreneurial Activity",
+    "OPP": "Opportunity",
+    "NEC": "Necessity",
+    "EST": "Established",
+    "RATE": "Rate",
+    "PER": "Perception",
+    "RNK": "Rank",
+    "UPPER": "Upper"
+}
+
+
+def decode_indicator_name(indicator_id: str, raw_name: str = None) -> str:
+    """Decode cryptic indicator IDs into readable names"""
+    if raw_name and len(raw_name) > 20 and not raw_name.isupper():
+        return raw_name
+    
+    parts = indicator_id.split("_")
+    
+    meaningful_parts = []
+    for i, part in enumerate(parts):
+        if i < 2:
+            continue
+        
+        decoded = ABBREVIATION_DECODER.get(part.upper(), part)
+        meaningful_parts.append(decoded)
+    
+    if meaningful_parts:
+        decoded_name = " - ".join(meaningful_parts)
+        return decoded_name
+    
+    return raw_name or indicator_id.replace("_", " ").title()
+
+
+# ============================================================================
+# DATABASE CATALOG
 # ============================================================================
 
 DATABASE_CATALOG = {
@@ -769,106 +873,32 @@ THEME_TAXONOMY = {
 }
 
 COMMON_COUNTRIES = {
-    # G20 Countries
-    "USA": "United States",
-    "CHN": "China",
-    "JPN": "Japan",
-    "DEU": "Germany",
-    "GBR": "United Kingdom",
-    "FRA": "France",
-    "IND": "India",
-    "ITA": "Italy",
-    "BRA": "Brazil",
-    "CAN": "Canada",
-    "KOR": "South Korea",
-    "RUS": "Russia",
-    "AUS": "Australia",
-    "ESP": "Spain",
-    "MEX": "Mexico",
-    "IDN": "Indonesia",
-    "NLD": "Netherlands",
-    "SAU": "Saudi Arabia",
-    "TUR": "Turkey",
-    "ARG": "Argentina",
-    "ZAF": "South Africa",
-    
-    # Other Major Economies
-    "CHE": "Switzerland",
-    "POL": "Poland",
-    "BEL": "Belgium",
-    "SWE": "Sweden",
-    "NOR": "Norway",
-    "AUT": "Austria",
-    "DNK": "Denmark",
-    "FIN": "Finland",
-    "IRL": "Ireland",
-    "SGP": "Singapore",
-    "HKG": "Hong Kong",
-    "MYS": "Malaysia",
-    "THA": "Thailand",
-    "PHL": "Philippines",
-    "VNM": "Vietnam",
-    "EGY": "Egypt",
-    "NGA": "Nigeria",
-    "PAK": "Pakistan",
-    "BGD": "Bangladesh",
-    "IRN": "Iran",
-    "ARE": "United Arab Emirates",
-    "ISR": "Israel",
-    "CHL": "Chile",
-    "COL": "Colombia",
-    "PER": "Peru",
-    
-    # African Countries
-    "KEN": "Kenya",
-    "ETH": "Ethiopia",
-    "GHA": "Ghana",
-    "TZA": "Tanzania",
-    "UGA": "Uganda",
-    "MAR": "Morocco",
-    "DZA": "Algeria",
-    "TUN": "Tunisia",
-    
-    # European Countries
-    "CZE": "Czech Republic",
-    "PRT": "Portugal",
-    "GRC": "Greece",
-    "HUN": "Hungary",
-    "ROU": "Romania",
-    "UKR": "Ukraine",
-    
-    # Latin American Countries
-    "VEN": "Venezuela",
-    "ECU": "Ecuador",
-    "GTM": "Guatemala",
-    "CRI": "Costa Rica",
-    "URY": "Uruguay",
-    "PAN": "Panama",
-    
-    # Asia Pacific
-    "NZL": "New Zealand",
-    "LKA": "Sri Lanka",
-    "NPL": "Nepal",
-    "KHM": "Cambodia",
+    "USA": "United States", "CHN": "China", "JPN": "Japan", "DEU": "Germany", "GBR": "United Kingdom",
+    "FRA": "France", "IND": "India", "ITA": "Italy", "BRA": "Brazil", "CAN": "Canada",
+    "KOR": "South Korea", "RUS": "Russia", "AUS": "Australia", "ESP": "Spain", "MEX": "Mexico",
+    "IDN": "Indonesia", "NLD": "Netherlands", "SAU": "Saudi Arabia", "TUR": "Turkey", "ARG": "Argentina",
+    "ZAF": "South Africa", "CHE": "Switzerland", "POL": "Poland", "BEL": "Belgium", "SWE": "Sweden",
+    "NOR": "Norway", "AUT": "Austria", "DNK": "Denmark", "FIN": "Finland", "IRL": "Ireland",
+    "SGP": "Singapore", "HKG": "Hong Kong", "MYS": "Malaysia", "THA": "Thailand", "PHL": "Philippines",
+    "VNM": "Vietnam", "EGY": "Egypt", "NGA": "Nigeria", "PAK": "Pakistan", "BGD": "Bangladesh",
+    "IRN": "Iran", "ARE": "United Arab Emirates", "ISR": "Israel", "CHL": "Chile", "COL": "Colombia",
+    "PER": "Peru", "KEN": "Kenya", "ETH": "Ethiopia", "GHA": "Ghana", "TZA": "Tanzania",
+    "UGA": "Uganda", "MAR": "Morocco", "DZA": "Algeria", "TUN": "Tunisia", "CZE": "Czech Republic",
+    "PRT": "Portugal", "GRC": "Greece", "HUN": "Hungary", "ROU": "Romania", "UKR": "Ukraine",
+    "VEN": "Venezuela", "ECU": "Ecuador", "GTM": "Guatemala", "CRI": "Costa Rica", "URY": "Uruguay",
+    "PAN": "Panama", "NZL": "New Zealand", "LKA": "Sri Lanka", "NPL": "Nepal", "KHM": "Cambodia",
     "MMR": "Myanmar"
 }
 
 REGIONS = {
-    "EAS": "East Asia & Pacific",
-    "ECS": "Europe & Central Asia",
-    "LCN": "Latin America & Caribbean",
-    "MEA": "Middle East & North Africa",
-    "NAC": "North America",
-    "SAS": "South Asia",
-    "SSF": "Sub-Saharan Africa",
-    "WLD": "World"
+    "EAS": "East Asia & Pacific", "ECS": "Europe & Central Asia", "LCN": "Latin America & Caribbean",
+    "MEA": "Middle East & North Africa", "NAC": "North America", "SAS": "South Asia",
+    "SSF": "Sub-Saharan Africa", "WLD": "World"
 }
 
 INCOME_GROUPS = {
-    "HIC": "High Income",
-    "UMC": "Upper Middle Income",
-    "LMC": "Lower Middle Income",
-    "LIC": "Low Income"
+    "HIC": "High Income", "UMC": "Upper Middle Income",
+    "LMC": "Lower Middle Income", "LIC": "Low Income"
 }
 
 
@@ -878,153 +908,32 @@ INCOME_GROUPS = {
 
 @st.cache_data(ttl=3600)
 def discover_databases():
-    """Cached database discovery - returns known list of databases"""
+    """Cached database discovery"""
     known_databases = [
-        'BS_BTI', 'BS_SGI', 'FAO_AS', 'FH_FIW', 'GEM_APS', 'GEM_NES', 'GI_AII', 
-        'IDB_INFRALATAM', 'IFC_GB', 'ILO_EMP', 'IMF_BOP', 'IMF_BOPAGG', 'IMF_CDIR', 
-        'IMF_CDIS', 'IMF_CPIS', 'IMF_ET', 'IMF_FAS', 'IMF_FFS', 'IMF_FISCALDECENTRALIZATION', 
-        'IMF_FSI', 'IMF_FSIRE', 'IMF_GFSCOFOG', 'IMF_GFSE', 'IMF_GFSIBS', 'IMF_GFSMAB', 
-        'IMF_GFSR', 'IMF_GFSSSUC', 'IMF_IFS', 'IMF_IRFCL', 'IMF_PCTOT', 'IMF_WEO', 
-        'ITU_DH', 'ITU_GCI', 'ITU_ICT', 'JRC_EDGAR', 'OECDWBG_PMR', 'OECD_BROADBAND', 
-        'OECD_IDD', 'OECD_TIVA', 'OWID_CB', 'POLITY5_PRC', 'RWB_PFI', 'UIS_EDSTATS', 
-        'UNCTAD_DE', 'UNCTAD_MT', 'UNDRR_SFM', 'UNESCO_UIS', 'UNICEF_DW', 'UNSD_EI', 
-        'VDEM_CORE', 'WB_BID', 'WB_BOOST', 'WB_BPS', 'WB_BREADY', 'WB_CCDFS', 'WB_CCKP', 
-        'WB_CLEAR', 'WB_CPIA', 'WB_CSC', 'WB_EDSTATS', 'WB_EQOSOGI', 'WB_ES', 'WB_ESG', 
-        'WB_EWSA', 'WB_FINDEX', 'WB_FSI', 'WB_GIRG', 'WB_GS', 'WB_GTMI', 'WB_HCP', 
-        'WB_HNP', 'WB_IDS', 'WB_LPI', 'WB_MPO', 'WB_RISE', 'WB_SPI', 'WB_SSGD', 
-        'WB_THINK_HAZARD', 'WB_WBL', 'WB_WDI', 'WB_WGI', 'WB_WITS', 'WB_WWBI', 
+        'BS_BTI', 'BS_SGI', 'FAO_AS', 'FH_FIW', 'GEM_APS', 'GEM_NES', 'GI_AII',
+        'IDB_INFRALATAM', 'IFC_GB', 'ILO_EMP', 'IMF_BOP', 'IMF_BOPAGG', 'IMF_CDIR',
+        'IMF_CDIS', 'IMF_CPIS', 'IMF_ET', 'IMF_FAS', 'IMF_FFS', 'IMF_FISCALDECENTRALIZATION',
+        'IMF_FSI', 'IMF_FSIRE', 'IMF_GFSCOFOG', 'IMF_GFSE', 'IMF_GFSIBS', 'IMF_GFSMAB',
+        'IMF_GFSR', 'IMF_GFSSSUC', 'IMF_IFS', 'IMF_IRFCL', 'IMF_PCTOT', 'IMF_WEO',
+        'ITU_DH', 'ITU_GCI', 'ITU_ICT', 'JRC_EDGAR', 'OECDWBG_PMR', 'OECD_BROADBAND',
+        'OECD_IDD', 'OECD_TIVA', 'OWID_CB', 'POLITY5_PRC', 'RWB_PFI', 'UIS_EDSTATS',
+        'UNCTAD_DE', 'UNCTAD_MT', 'UNDRR_SFM', 'UNESCO_UIS', 'UNICEF_DW', 'UNSD_EI',
+        'VDEM_CORE', 'WB_BID', 'WB_BOOST', 'WB_BPS', 'WB_BREADY', 'WB_CCDFS', 'WB_CCKP',
+        'WB_CLEAR', 'WB_CPIA', 'WB_CSC', 'WB_EDSTATS', 'WB_EQOSOGI', 'WB_ES', 'WB_ESG',
+        'WB_EWSA', 'WB_FINDEX', 'WB_FSI', 'WB_GIRG', 'WB_GS', 'WB_GTMI', 'WB_HCP',
+        'WB_HNP', 'WB_IDS', 'WB_LPI', 'WB_MPO', 'WB_RISE', 'WB_SPI', 'WB_SSGD',
+        'WB_THINK_HAZARD', 'WB_WBL', 'WB_WDI', 'WB_WGI', 'WB_WITS', 'WB_WWBI',
         'WEF_GCI', 'WEF_GCIHH', 'WEF_TTDI', 'WI_GRT', 'WJP_ROL', 'WRI_CLIMATEWATCH'
     ]
-    
-    try:
-        client = Data360Client()
-        result = client.search("population", top=1000)
-        
-        if "value" in result:
-            api_databases = set()
-            for item in result["value"]:
-                if "series_description" in item:
-                    db_id = item["series_description"].get("database_id")
-                    if db_id:
-                        api_databases.add(db_id)
-            
-            if api_databases:
-                all_databases = set(known_databases) | api_databases
-                return sorted(list(all_databases))
-    except:
-        pass
-    
     return sorted(known_databases)
-
-
-# Common abbreviation decoder for better readability
-ABBREVIATION_DECODER = {
-    # IMF Balance of Payments
-    "BOP": "Balance of Payments",
-    "BP6": "BPM6",
-    "BXSTR": "External Debt",
-    "BXSTV": "External Debt Value",
-    "SPE": "Special",
-    "USD": "US Dollars",
-    "EUR": "Euros",
-    "GBP": "British Pounds",
-    "JPY": "Japanese Yen",
-    "XDC": "SDR (Special Drawing Rights)",
-    "IARMGB": "Interest Arrears",
-    "BFOCDLOF": "Foreign Direct Investment",
-    "BMGN": "Monetary Gold",
-    "BXSTVBS": "External Debt by Sector",
-    "BIPIOPC": "Portfolio Investment",
-    "BFOLN": "Financial Derivatives",
-    "BFOINLG": "Foreign Investment",
-    "BFQINLG": "Financial Account",
-    "BFQIN": "Financial Account Inflows",
-    
-    # World Bank
-    "WDI": "World Development Indicators",
-    "AG": "Agriculture",
-    "CON": "Consumption",
-    "FERT": "Fertilizer",
-    "ZS": "% of",
-    "NY": "National Accounts",
-    "GDP": "Gross Domestic Product",
-    "MKTP": "Market Prices",
-    "CD": "Current USD",
-    "PCAP": "Per Capita",
-    "KD": "Constant USD",
-    "SP": "Population",
-    "POP": "Population",
-    "TOTL": "Total",
-    "FP": "Prices",
-    "CPI": "Consumer Price Index",
-    "SL": "Labor",
-    "UEM": "Unemployment",
-    "SE": "Education",
-    "PRM": "Primary",
-    "CMPT": "Completion Rate",
-    "FE": "Female",
-    "MA": "Male",
-    "SH": "Health",
-    "DYN": "Dynamics",
-    "LE00": "Life Expectancy",
-    "IN": "Indicator",
-    
-    # Common terms
-    "PCT": "Percent",
-    "TOT": "Total",
-    "AVG": "Average",
-    "IDX": "Index",
-    "IND": "Industry",
-    "MFG": "Manufacturing",
-    "SVC": "Services",
-    "GOVT": "Government",
-    "EXP": "Exports",
-    "IMP": "Imports",
-    "INV": "Investment",
-    "FDI": "Foreign Direct Investment",
-    "GNI": "Gross National Income",
-    "PPP": "Purchasing Power Parity"
-}
-
-
-def decode_indicator_name(indicator_id: str, raw_name: str = None) -> str:
-    """
-    Decode cryptic indicator IDs into readable names
-    """
-    # If we have a proper name from the API, use it
-    if raw_name and len(raw_name) > 20 and not raw_name.isupper():
-        return raw_name
-    
-    # Otherwise, try to decode the ID
-    # Remove database prefix
-    parts = indicator_id.split("_")
-    
-    # Skip database prefix (first 1-2 parts usually)
-    meaningful_parts = []
-    for i, part in enumerate(parts):
-        if i < 2:  # Skip database prefix
-            continue
-        
-        # Try to decode each part
-        decoded = ABBREVIATION_DECODER.get(part.upper(), part)
-        meaningful_parts.append(decoded)
-    
-    if meaningful_parts:
-        decoded_name = " - ".join(meaningful_parts)
-        return decoded_name
-    
-    # Fallback: just make it readable
-    return raw_name or indicator_id.replace("_", " ").title()
 
 
 @st.cache_data(ttl=3600)
 def get_indicators_with_metadata(database_id: str, limit: int = 500):
-    """Get indicators with their metadata - uses search API to get full metadata"""
+    """Get indicators with improved names"""
     client = Data360Client()
     
     try:
-        # First, try using the search API to get rich metadata
-        # Search for all indicators in this database
         filter_str = f"series_description/database_id eq '{database_id}'"
         result = client.search("*", top=min(limit, 1000), filter_by=filter_str)
         
@@ -1036,7 +945,6 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
                     raw_name = desc.get("name", "")
                     indicator_id = desc.get("idno")
                     
-                    # Use API name if good, otherwise decode
                     if raw_name and len(raw_name) > 20 and not raw_name.isupper():
                         display_name = raw_name
                     else:
@@ -1054,12 +962,10 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
             if indicators:
                 return indicators[:limit]
         
-        # Fallback: use /indicators endpoint if search fails
         indicator_ids = client.list_indicators(database_id)
         
         indicators = []
         for ind_id in indicator_ids[:limit]:
-            # Create a more readable name from the ID
             display_name = decode_indicator_name(ind_id)
             indicators.append({
                 "id": ind_id,
@@ -1077,11 +983,11 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
 
 
 @st.cache_data(ttl=3600)
-def search_indicators_filtered(query: str, themes: List[str] = None, 
-                               databases: List[str] = None, 
+def search_indicators_filtered(query: str, themes: List[str] = None,
+                               databases: List[str] = None,
                                organizations: List[str] = None,
                                limit: int = 100):
-    """Search with filters including organizations"""
+    """Search with filters"""
     client = Data360Client()
     
     if not query or query.strip() == "" or query == "*":
@@ -1089,7 +995,6 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
     
     filters = []
     
-    # Build database filter from organizations or direct database selection
     if organizations:
         org_databases = [
             db_id for db_id, info in DATABASE_CATALOG.items()
@@ -1102,7 +1007,6 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
         db_filter = " or ".join([f"series_description/database_id eq '{db}'" for db in databases])
         filters.append(f"({db_filter})")
     
-    # Add theme filter if specified
     if themes:
         theme_filter = " or ".join([f"series_description/topics/any(t: t/name eq '{theme}')" for theme in themes])
         filters.append(f"({theme_filter})")
@@ -1116,7 +1020,6 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
         if "value" in result and result["value"]:
             for item in result["value"]:
                 desc = item.get("series_description", {})
-                # Only include items that have an idno (indicators)
                 if desc.get("idno"):
                     indicators.append({
                         "id": desc.get("idno"),
@@ -1129,7 +1032,6 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
         
         return indicators, result.get("@odata.count", len(indicators))
     except Exception as e:
-        # Show actual error for debugging
         import traceback
         error_msg = str(e)
         st.error(f"Search failed: {error_msg}")
@@ -1138,9 +1040,9 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
 
 
 @st.cache_data(ttl=3600)
-def fetch_data_cached(database_id: str, indicator: str, countries: List[str], 
+def fetch_data_cached(database_id: str, indicator: str, countries: List[str],
                      year_from: str, year_to: str):
-    """Cached data fetch for multiple countries"""
+    """Cached data fetch"""
     client = Data360Client()
     all_data = []
     
@@ -1167,7 +1069,7 @@ def fetch_data_cached(database_id: str, indicator: str, countries: List[str],
 # ============================================================================
 
 def create_time_series_plot(df: pd.DataFrame, title: str, indicator_name: str = ""):
-    """Create elegant time series chart"""
+    """Create time series chart"""
     fig = go.Figure()
     
     colors = px.colors.qualitative.Set2
@@ -1218,7 +1120,7 @@ def create_time_series_plot(df: pd.DataFrame, title: str, indicator_name: str = 
 
 
 def create_comparison_chart(df: pd.DataFrame, year: str, title: str):
-    """Create bar chart for country comparison"""
+    """Create bar chart"""
     year_data = df[df['TIME_PERIOD'] == year].copy()
     year_data['Country'] = year_data['REF_AREA'].map(lambda x: COMMON_COUNTRIES.get(x, x))
     year_data = year_data.sort_values('OBS_VALUE', ascending=True)
@@ -1257,7 +1159,7 @@ def create_comparison_chart(df: pd.DataFrame, year: str, title: str):
 
 
 # ============================================================================
-# STREAMLIT APP CONFIGURATION
+# STREAMLIT APP
 # ============================================================================
 
 st.set_page_config(
@@ -1267,265 +1169,52 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - Dark Mode Elegant Design
+# CSS
 st.markdown("""
     <style>
-    /* Main background */
-    .main {
-        background: linear-gradient(135deg, #0e1117 0%, #1a1d29 100%);
-    }
-    
-    .stApp {
-        background: linear-gradient(135deg, #0e1117 0%, #1a1d29 100%);
-    }
-    
-    /* Headers */
-    h1, h2, h3 {
-        color: #ffffff;
-        font-weight: 300;
-        letter-spacing: 0.5px;
-    }
-    
-    h1 {
-        font-size: 2.5rem !important;
-        margin-bottom: 0.5rem !important;
-    }
-    
-    /* Metric cards */
-    div[data-testid="stMetricValue"] {
-        font-size: 28px;
-        color: #4a9eff;
-        font-weight: 500;
-    }
-    
-    div[data-testid="stMetricLabel"] {
-        color: #a0a0a0;
-        font-size: 14px;
-    }
-    
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background: linear-gradient(90deg, #1e2130 0%, #262b3d 100%);
-        border-radius: 8px;
-        border: 1px solid #2d3142;
-        color: #ffffff;
-        font-weight: 500;
-    }
-    
-    .streamlit-expanderContent {
-        background: #1a1d29;
-        border: 1px solid #2d3142;
-        border-top: none;
-    }
-    
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: transparent;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: #1e2130;
-        border-radius: 8px 8px 0 0;
-        padding: 12px 24px;
-        color: #a0a0a0;
-        border: 1px solid #2d3142;
-        border-bottom: none;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: #262b3d;
-        color: #4a9eff;
-        border-color: #4a9eff;
-    }
-    
-    /* Buttons */
+    .main { background: linear-gradient(135deg, #0e1117 0%, #1a1d29 100%); }
+    .stApp { background: linear-gradient(135deg, #0e1117 0%, #1a1d29 100%); }
+    h1, h2, h3 { color: #ffffff; font-weight: 300; }
+    div[data-testid="stMetricValue"] { font-size: 28px; color: #4a9eff; }
     .stButton > button {
         background: linear-gradient(135deg, #4a9eff 0%, #3d7dd4 100%);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 0.5rem 1rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
+        color: white; border: none; border-radius: 6px; font-weight: 500;
     }
-    
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #5aa9ff 0%, #4d8de4 100%);
-        box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
-        transform: translateY(-2px);
-    }
-    
-    /* Input fields */
-    .stTextInput > div > div > input,
-    .stSelectbox > div > div > select,
-    .stMultiSelect > div > div > div {
-        background: #1e2130;
-        border: 1px solid #2d3142;
-        border-radius: 6px;
-        color: #ffffff;
-    }
-    
-    /* Checkboxes */
-    .stCheckbox {
-        color: #ffffff;
-    }
-    
-    /* DataFrames */
-    .dataframe {
-        background: #1a1d29;
-        color: #ffffff;
-    }
-    
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a1d29 0%, #1e2130 100%);
-        border-right: 1px solid #2d3142;
-    }
-    
-    section[data-testid="stSidebar"] .stMarkdown {
-        color: #ffffff;
-    }
-    
-    /* Download button */
-    .stDownloadButton > button {
-        background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 0.5rem 1rem;
-        font-weight: 500;
-    }
-    
-    /* Info boxes */
-    .stAlert {
-        background: #1e2130;
-        border: 1px solid #2d3142;
-        border-radius: 8px;
-        color: #ffffff;
-    }
-    
-    /* Filter section cards */
-    .filter-card {
-        background: linear-gradient(135deg, #1e2130 0%, #262b3d 100%);
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #2d3142;
-        margin: 10px 0;
-    }
-    
-    /* Multiselect styling */
-    .stMultiSelect > div > div {
-        background: #1e2130;
-        border: 1px solid #2d3142;
-        border-radius: 6px;
-    }
-    
-    /* Search input in main area */
-    div[data-testid="stTextInput"] > div > div > input {
-        background: #1e2130;
-        border: 1px solid #4a9eff;
-        border-radius: 8px;
-        padding: 12px;
-        color: #ffffff;
-        font-size: 16px;
-    }
-    
-    div[data-testid="stTextInput"] > div > div > input:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.2);
-    }
-    
-    /* Tags/badges */
     .tag {
-        display: inline-block;
-        background: #2d3142;
-        color: #4a9eff;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 12px;
-        margin: 2px;
+        display: inline-block; background: #2d3142; color: #4a9eff;
+        padding: 4px 12px; border-radius: 12px; font-size: 12px; margin: 2px;
         border: 1px solid #4a9eff;
     }
-    
     .database-badge {
-        display: inline-block;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
-        margin: 2px;
-    }
-    
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #1a1d29;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: #2d3142;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #4a9eff;
+        display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px;
+        font-weight: 600; margin: 2px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-
-# ============================================================================
-# SESSION STATE INITIALIZATION
-# ============================================================================
-
+# Session State
 if 'client' not in st.session_state:
     st.session_state.client = Data360Client()
-
 if 'databases' not in st.session_state:
     st.session_state.databases = None
-
 if 'selected_themes' not in st.session_state:
     st.session_state.selected_themes = []
-
 if 'selected_databases' not in st.session_state:
     st.session_state.selected_databases = []
-
 if 'selected_organizations' not in st.session_state:
     st.session_state.selected_organizations = []
-
 if 'current_data' not in st.session_state:
     st.session_state.current_data = None
-
 if 'query_database' not in st.session_state:
     st.session_state.query_database = 'WB_WDI'
 
-if 'show_query_tab' not in st.session_state:
-    st.session_state.show_query_tab = False
-
-if 'last_search_results' not in st.session_state:
-    st.session_state.last_search_results = None
-
-
-# ============================================================================
-# INITIALIZATION
-# ============================================================================
-
+# Load databases
 if st.session_state.databases is None:
     with st.spinner("🔄 Loading databases..."):
         st.session_state.databases = discover_databases()
 
-
-# ============================================================================
-# HEADER & FILTERS
-# ============================================================================
-
+# Header
 col1, col2, col3 = st.columns([1, 3, 1])
 with col2:
     st.markdown("""
@@ -1539,27 +1228,14 @@ with col2:
         </div>
     """, unsafe_allow_html=True)
 
-# ============================================================================
-# BEAUTIFUL FILTER SECTION
-# ============================================================================
+# Filters
+st.markdown("<div style='text-align: center; margin: 30px 0;'><h2 style='color: #4a9eff;'>🎯 Filters & Search</h2></div>", unsafe_allow_html=True)
 
-st.markdown("""
-    <div style='text-align: center; margin: 30px 0;'>
-        <h2 style='color: #4a9eff; font-weight: 300; letter-spacing: 1px;'>🎯 Filters & Search</h2>
-    </div>
-""", unsafe_allow_html=True)
-
-st.markdown("<div style='margin: 20px 0;'>", unsafe_allow_html=True)
 filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([3, 2, 2, 1])
 
 with filter_col1:
     st.markdown("#### 🔍 Quick Search")
-    main_search = st.text_input(
-        "Search datasets or indicators",
-        placeholder="e.g., GDP, education, climate change...",
-        key="main_search_input",
-        label_visibility="collapsed"
-    )
+    main_search = st.text_input("Search", placeholder="e.g., GDP, education...", key="main_search_input", label_visibility="collapsed")
 
 with filter_col2:
     st.markdown("#### 📚 Themes")
@@ -1569,14 +1245,8 @@ with filter_col2:
             theme_counts[theme] += 1
     
     theme_options = sorted(theme_counts.keys())
-    selected_themes_new = st.multiselect(
-        "Select themes",
-        options=theme_options,
-        default=st.session_state.selected_themes,
-        format_func=lambda x: f"{x} ({theme_counts[x]})",
-        key="themes_multiselect",
-        label_visibility="collapsed"
-    )
+    selected_themes_new = st.multiselect("Select themes", options=theme_options, default=st.session_state.selected_themes,
+                                        format_func=lambda x: f"{x} ({theme_counts[x]})", key="themes_multiselect", label_visibility="collapsed")
     st.session_state.selected_themes = selected_themes_new
 
 with filter_col3:
@@ -1587,14 +1257,8 @@ with filter_col3:
         org_counts[org] += 1
     
     org_options = sorted(org_counts.keys())
-    selected_orgs_new = st.multiselect(
-        "Select organizations",
-        options=org_options,
-        default=st.session_state.get('selected_organizations', []),
-        format_func=lambda x: f"{x} ({org_counts[x]})",
-        key="orgs_multiselect",
-        label_visibility="collapsed"
-    )
+    selected_orgs_new = st.multiselect("Select orgs", options=org_options, default=st.session_state.get('selected_organizations', []),
+                                      format_func=lambda x: f"{x} ({org_counts[x]})", key="orgs_multiselect", label_visibility="collapsed")
     st.session_state.selected_organizations = selected_orgs_new
 
 with filter_col4:
@@ -1604,24 +1268,8 @@ with filter_col4:
         st.session_state.selected_organizations = []
         st.rerun()
 
-st.markdown("</div>", unsafe_allow_html=True)
-
-if st.session_state.selected_themes or st.session_state.get('selected_organizations'):
-    st.markdown("<div style='margin: 15px 0;'>", unsafe_allow_html=True)
-    st.markdown("**🏷️ Active Filters:**")
-    filter_html = ""
-    for theme in st.session_state.selected_themes:
-        filter_html += f'<span class="tag">{theme}</span>'
-    for org in st.session_state.get('selected_organizations', []):
-        filter_html += f'<span class="database-badge">{org}</span>'
-    st.markdown(filter_html, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-st.markdown("""
-    <div style='text-align: center; margin: 30px 0 20px 0;'>
-        <div style='height: 2px; background: linear-gradient(90deg, transparent, #4a9eff, transparent);'></div>
-    </div>
-""", unsafe_allow_html=True)
+# Stats
+st.markdown("<div style='text-align: center; margin: 20px 0;'><div style='height: 2px; background: linear-gradient(90deg, transparent, #4a9eff, transparent);'></div></div>", unsafe_allow_html=True)
 
 stat_col1, stat_col2, stat_col3, stat_col4, stat_col5 = st.columns(5)
 with stat_col1:
@@ -1634,51 +1282,23 @@ with stat_col4:
     active_filters = len(st.session_state.selected_themes) + len(st.session_state.get('selected_organizations', []))
     st.metric("🎯 Active Filters", active_filters)
 with stat_col5:
-    filtered_count = 0
-    for db_id, info in DATABASE_CATALOG.items():
-        if st.session_state.get('selected_organizations') and info['organization'] not in st.session_state.selected_organizations:
-            continue
-        if st.session_state.selected_themes:
-            if not any(theme in info.get('themes', []) for theme in st.session_state.selected_themes):
-                continue
-        filtered_count += 1
+    filtered_count = sum(1 for db_id, info in DATABASE_CATALOG.items() if
+        (not st.session_state.get('selected_organizations') or info['organization'] in st.session_state.selected_organizations) and
+        (not st.session_state.selected_themes or any(theme in info.get('themes', []) for theme in st.session_state.selected_themes)))
     st.metric("📁 Showing", filtered_count)
 
-st.markdown("""
-    <div style='text-align: center; margin: 20px 0 30px 0;'>
-        <div style='height: 2px; background: linear-gradient(90deg, transparent, #667eea, transparent);'></div>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; margin: 20px 0;'><div style='height: 2px; background: linear-gradient(90deg, transparent, #667eea, transparent);'></div></div>", unsafe_allow_html=True)
 
+# Tabs
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗂️ Browse Datasets", "🔎 Explore Indicators", "📊 Query & Visualize", "🗄️ Database Catalog", "💾 Batch Download"])
 
-# ============================================================================
-# MAIN CONTENT - TABS
-# ============================================================================
-
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🗂️ Browse Datasets",
-    "🔎 Explore Indicators",
-    "📊 Query & Visualize", 
-    "🗄️ Database Catalog",
-    "💾 Batch Download"
-])
-
-
-# ============================================================================
 # TAB 1: BROWSE DATASETS
-# ============================================================================
-
 with tab1:
     st.markdown("## Browse Datasets")
     
-    # ========================================================================
-    # SHOW INDICATORS FIRST IF EXPLORING A DATABASE
-    # ========================================================================
     if 'exploring_database' in st.session_state and st.session_state.exploring_database:
-        # Big visual indicator that we're in exploration mode
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
                 <h2 style='color: white; margin: 0;'>🔍 Exploring Indicators</h2>
             </div>
         """, unsafe_allow_html=True)
@@ -1695,38 +1315,23 @@ with tab1:
                 del st.session_state.exploring_db_name
                 st.rerun()
         
-        with st.spinner(f"🔄 Loading indicators from {st.session_state.exploring_database}... This may take a moment."):
+        with st.spinner(f"🔄 Loading indicators from {st.session_state.exploring_database}..."):
             explore_indicators = get_indicators_with_metadata(st.session_state.exploring_database, limit=200)
             
             if explore_indicators:
                 st.success(f"✅ Loaded {len(explore_indicators)} indicators")
                 
-                # Search within these indicators
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    indicator_search = st.text_input(
-                        "🔎 Filter indicators by name or ID",
-                        placeholder="e.g., population, GDP, health...",
-                        key="explore_indicator_search"
-                    )
+                    indicator_search = st.text_input("🔎 Filter indicators", placeholder="e.g., population, GDP...", key="explore_indicator_search")
                 with col2:
                     st.metric("Total", len(explore_indicators))
                 
-                # Filter indicators
                 if indicator_search:
                     search_lower = indicator_search.lower()
-                    filtered_explore = [
-                        ind for ind in explore_indicators 
-                        if search_lower in ind['name'].lower() 
-                        or search_lower in ind['id'].lower()
-                        or (ind.get('description') and search_lower in ind['description'].lower())
-                    ]
+                    filtered_explore = [ind for ind in explore_indicators if search_lower in ind['name'].lower() or search_lower in ind['id'].lower() or (ind.get('description') and search_lower in ind['description'].lower())]
                 else:
-                    filtered_explore = explore_indicators[:50]  # Show first 50
-                
-                if indicator_search and not filtered_explore:
-                    st.warning(f"No indicators match '{indicator_search}'. Try a different search term.")
-                    filtered_explore = explore_indicators[:20]  # Show first 20 as fallback
+                    filtered_explore = explore_indicators[:50]
                 
                 st.markdown(f"### Showing {len(filtered_explore)} indicators")
                 
@@ -1735,18 +1340,11 @@ with tab1:
                         col1, col2 = st.columns([5, 1])
                         
                         with col1:
-                            # Show name prominently
                             st.markdown(f"**{ind['name']}**")
-                            
-                            # Show ID in smaller text
                             st.caption(f"🆔 `{ind['id']}`")
-                            
-                            # Show description if available
                             if ind.get('description') and ind['description'] != f"Indicator from {st.session_state.exploring_database}":
                                 desc_text = ind['description'][:200] + "..." if len(ind.get('description', '')) > 200 else ind.get('description', '')
                                 st.markdown(f"*{desc_text}*")
-                            
-                            # Show topics/tags if available
                             if ind.get('topics') and any(ind.get('topics', [])):
                                 topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'][:3] if t])
                                 st.markdown(topics_html, unsafe_allow_html=True)
@@ -1755,416 +1353,183 @@ with tab1:
                             if st.button("📊 Query", key=f"explore_query_{ind['id']}", use_container_width=True):
                                 st.session_state.selected_indicator = ind
                                 st.session_state.query_database = st.session_state.exploring_database
-                                # Show a toast message
                                 st.toast(f"✅ Selected: {ind['name'][:50]}...", icon="✅")
-                                st.info("💡 **Next step:** Go to the '📊 Query & Visualize' tab to fetch and visualize this data!")
-                                # Scroll indicator to top by rerunning
+                                st.info("💡 **Next step:** Go to '📊 Query & Visualize' tab!")
                                 time.sleep(1)
                         
                         st.markdown("---")
             else:
-                st.warning("⚠️ No indicators could be loaded from this database.")
-                st.info("This might be because:")
-                st.markdown("""
-                - The database ID is incorrect
-                - The API is temporarily unavailable
-                - The database has restricted access
-                
-                **Try another database from the list below.**
-                """)
+                st.warning("⚠️ No indicators could be loaded.")
         
-        st.markdown("---")
-        st.markdown("""
-            <div style='text-align: center; margin: 30px 0;'>
-                <h3 style='color: #888;'>⬇️ Scroll down to browse other databases ⬇️</h3>
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown("<div style='text-align: center; margin: 30px 0;'><h3 style='color: #888;'>⬇️ Scroll down to browse other databases ⬇️</h3></div>", unsafe_allow_html=True)
         st.markdown("---")
     else:
         st.markdown("Explore available datasets with detailed information")
     
-    # ========================================================================
-    # DATASET LIST (now appears below indicators if exploring)
-    # ========================================================================
-    
+    # Dataset list
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
-        dataset_search = st.text_input(
-            "🔎 Search datasets",
-            placeholder="e.g., education, poverty, climate",
-            key="dataset_search"
-        )
-    
+        dataset_search = st.text_input("🔎 Search datasets", placeholder="e.g., education, poverty", key="dataset_search")
     with col2:
-        sort_by = st.selectbox(
-            "Sort by",
-            ["Name (A-Z)", "Name (Z-A)", "Indicator Count (High-Low)", "Indicator Count (Low-High)", "Last Updated"],
-            key="dataset_sort"
-        )
-    
+        sort_by = st.selectbox("Sort by", ["Name (A-Z)", "Indicator Count (High-Low)"], key="dataset_sort")
     with col3:
-        items_per_page = st.selectbox(
-            "Items per page",
-            [10, 20, 50, 100],
-            index=1,
-            key="items_per_page"
-        )
+        items_per_page = st.selectbox("Per page", [10, 20, 50], index=1, key="items_per_page")
     
     filtered_datasets = {}
-    
     for db_id, info in DATABASE_CATALOG.items():
         if st.session_state.get('selected_organizations') and info['organization'] not in st.session_state.selected_organizations:
             continue
-        
-        if st.session_state.selected_themes:
-            if not any(theme in info.get('themes', []) for theme in st.session_state.selected_themes):
-                continue
-        
+        if st.session_state.selected_themes and not any(theme in info.get('themes', []) for theme in st.session_state.selected_themes):
+            continue
         if dataset_search:
-            search_lower = dataset_search.lower()
-            if not (
-                search_lower in info['name'].lower() or
-                search_lower in info.get('description', '').lower() or
-                search_lower in db_id.lower()
-            ):
+            if not (dataset_search.lower() in info['name'].lower() or dataset_search.lower() in info.get('description', '').lower()):
                 continue
-        
         filtered_datasets[db_id] = info
     
-    if sort_by == "Name (A-Z)":
-        sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1]['name'])
-    elif sort_by == "Name (Z-A)":
-        sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1]['name'], reverse=True)
-    elif sort_by == "Indicator Count (High-Low)":
-        sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1].get('indicator_count', 0), reverse=True)
-    elif sort_by == "Indicator Count (Low-High)":
-        sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1].get('indicator_count', 0))
-    else:
-        sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1]['name'])
+    sorted_datasets = sorted(filtered_datasets.items(), key=lambda x: x[1].get('indicator_count', 0) if "Count" in sort_by else x[1]['name'], reverse="High" in sort_by)
     
-    total_count = len(filtered_datasets)
-    st.markdown(f"### Showing **1-{min(items_per_page, total_count)}** of **{total_count}** datasets")
-    
-    if st.session_state.selected_themes or st.session_state.get('selected_organizations'):
-        st.markdown("**Active filters:**")
-        filter_html = ""
-        for theme in st.session_state.selected_themes:
-            filter_html += f'<span class="tag">{theme}</span>'
-        for org in st.session_state.get('selected_organizations', []):
-            filter_html += f'<span class="database-badge">{org}</span>'
-        st.markdown(filter_html, unsafe_allow_html=True)
-    
+    st.markdown(f"### Showing **{min(items_per_page, len(filtered_datasets))}** of **{len(filtered_datasets)}** datasets")
     st.markdown("---")
     
-    for idx, (db_id, info) in enumerate(sorted_datasets[:items_per_page], 1):
+    for db_id, info in sorted_datasets[:items_per_page]:
         with st.container():
             col1, col2 = st.columns([5, 1])
             
             with col1:
                 st.markdown(f"### 🗂️ {info['name']}")
-                
-                st.caption(f"**Last updated:** Recently | **{info.get('indicator_count', 'N/A')}** Indicators")
-                
-                org_html = f'<span class="database-badge">{info["organization"]}</span>'
-                st.markdown(org_html, unsafe_allow_html=True)
-                
+                st.caption(f"**{info.get('indicator_count', 'N/A')}** Indicators")
+                st.markdown(f'<span class="database-badge">{info["organization"]}</span>', unsafe_allow_html=True)
                 st.markdown(f"*{info['description']}*")
-                
                 if info.get('themes'):
                     themes_html = " ".join([f'<span class="tag">{t}</span>' for t in info['themes'][:5]])
                     st.markdown(themes_html, unsafe_allow_html=True)
-                
                 st.caption(f"📊 Dataset ID: `{db_id}`")
             
             with col2:
                 st.markdown(f"**{info.get('indicator_count', 'N/A')}**")
                 st.caption("INDICATORS")
-                
                 if st.button("📈 Explore", key=f"dataset_explore_{db_id}", use_container_width=True):
                     st.session_state.exploring_database = db_id
                     st.session_state.exploring_db_name = info['name']
-                    # Rerun to show indicators at top
                     st.rerun()
             
             st.markdown("---")
-    
-    if total_count > items_per_page:
-        st.info(f"Showing first {items_per_page} datasets. Use filters to narrow results or increase items per page.")
 
-
-# ============================================================================
 # TAB 2: EXPLORE INDICATORS
-# ============================================================================
-
 with tab2:
     st.markdown("## Explore Indicators")
     
-    # Debug toggle
-    show_debug = st.checkbox("🐛 Show debug info", value=False, key="debug_mode")
+    show_debug = st.checkbox("🐛 Debug", value=False, key="debug_mode")
     
     col1, col2, col3 = st.columns([3, 1, 1])
-    
     with col1:
-        search_query = st.text_input(
-            "🔎 Search indicators",
-            placeholder="e.g., GDP, poverty rate, CO2 emissions, education",
-            key="search_main"
-        )
-    
+        search_query = st.text_input("🔎 Search", placeholder="e.g., GDP, poverty", key="search_main")
     with col2:
-        sort_option = st.selectbox(
-            "Sort by",
-            ["Relevance", "Name A-Z", "Database"],
-            key="sort_option"
-        )
-    
+        sort_option = st.selectbox("Sort", ["Relevance", "Name A-Z"], key="sort_option")
     with col3:
         if 'last_search_results' in st.session_state and st.session_state.last_search_results:
             if st.button("🗑️ Clear", use_container_width=True, key="clear_search_results"):
                 del st.session_state.last_search_results
                 st.rerun()
     
-    if st.session_state.selected_themes or st.session_state.get('selected_organizations'):
-        st.markdown("**Active filters:**")
-        filter_html = ""
-        for theme in st.session_state.selected_themes:
-            filter_html += f'<span class="tag">{theme}</span>'
-        for org in st.session_state.get('selected_organizations', []):
-            filter_html += f'<span class="database-badge">{org}</span>'
-        st.markdown(filter_html, unsafe_allow_html=True)
-    
     if st.button("🚀 Search", type="primary", use_container_width=True):
         if search_query or st.session_state.selected_themes or st.session_state.get('selected_organizations'):
-            with st.spinner("Searching indicators..."):
-                if show_debug:
-                    st.info(f"Search query: {search_query}")
-                    st.info(f"Themes: {st.session_state.selected_themes}")
-                    st.info(f"Organizations: {st.session_state.get('selected_organizations')}")
-                
+            with st.spinner("Searching..."):
                 indicators, total_count = search_indicators_filtered(
                     query=search_query if search_query else "GDP",
                     themes=st.session_state.selected_themes if st.session_state.selected_themes else None,
-                    organizations=st.session_state.get('selected_organizations') if st.session_state.get('selected_organizations') else None,
-                    databases=st.session_state.selected_databases if st.session_state.selected_databases else None,
+                    organizations=st.session_state.get('selected_organizations'),
                     limit=100
                 )
-                
-                if show_debug:
-                    st.info(f"Found {len(indicators)} indicators, total count: {total_count}")
-                
                 st.session_state.last_search_results = {'indicators': indicators, 'total_count': total_count}
                 st.rerun()
         else:
-            st.warning("⚠️ Please enter a search term or select at least one filter")
+            st.warning("⚠️ Enter search term or select filters")
     
     if 'last_search_results' in st.session_state and st.session_state.last_search_results:
         indicators = st.session_state.last_search_results['indicators']
         total_count = st.session_state.last_search_results['total_count']
         
         if len(indicators) == 0:
-            st.warning("⚠️ **No results found from API search**")
-            st.info("""
-            **The Data360 search API may have issues. Try these alternatives:**
-            
-            1. **🗂️ Browse Datasets Tab** - Works reliably! Click on any database, then "Explore" to see all its indicators
-            2. **Try simpler search terms** - Use single words like "GDP", "population", "health"
-            3. **Remove filters** - Clear themes/organizations and try again
-            4. **Use Quick Search buttons** below
-            """)
-            
-            # Show quick database shortcuts
-            st.markdown("### 🚀 Quick Access to Popular Databases:")
-            quick_col1, quick_col2, quick_col3 = st.columns(3)
-            
-            with quick_col1:
-                if st.button("📊 World Development Indicators (WB_WDI)", key="quick_wdi", use_container_width=True):
-                    st.session_state.exploring_database = "WB_WDI"
-                    st.session_state.exploring_db_name = "World Development Indicators"
-                    st.info("✅ Go to 'Browse Datasets' tab to see 1,508 indicators!")
-            
-            with quick_col2:
-                if st.button("💰 World Economic Outlook (IMF_WEO)", key="quick_weo", use_container_width=True):
-                    st.session_state.exploring_database = "IMF_WEO"
-                    st.session_state.exploring_db_name = "World Economic Outlook"
-                    st.info("✅ Go to 'Browse Datasets' tab to see indicators!")
-            
-            with quick_col3:
-                if st.button("🏛️ Governance Indicators (WB_WGI)", key="quick_wgi", use_container_width=True):
-                    st.session_state.exploring_database = "WB_WGI"
-                    st.session_state.exploring_db_name = "Worldwide Governance Indicators"
-                    st.info("✅ Go to 'Browse Datasets' tab to see indicators!")
+            st.warning("⚠️ No results. Try Browse Datasets tab instead!")
         else:
-            st.markdown(f"### Results: Showing **{len(indicators)}** of **{total_count}** indicators")
-        
-        if indicators:
+            st.markdown(f"### Found **{len(indicators)}** of **{total_count}** indicators")
+            
             by_database = defaultdict(list)
             for ind in indicators:
                 by_database[ind['database_id']].append(ind)
             
             for db_id, db_indicators in sorted(by_database.items()):
-                db_info = DATABASE_CATALOG.get(db_id, {"name": db_id, "organization": "Unknown"})
+                db_info = DATABASE_CATALOG.get(db_id, {"name": db_id})
                 
-                with st.expander(
-                    f"📊 **{db_info['name']}** ({db_id}) - {len(db_indicators)} indicators",
-                    expanded=True
-                ):
+                with st.expander(f"📊 **{db_info['name']}** - {len(db_indicators)} indicators", expanded=True):
                     for ind in db_indicators[:20]:
                         col1, col2 = st.columns([4, 1])
-                        
                         with col1:
                             st.markdown(f"**{ind['name']}**")
                             if ind['description']:
-                                st.caption(ind['description'][:200] + "..." if len(ind['description']) > 200 else ind['description'])
+                                st.caption(ind['description'][:200])
                             st.caption(f"🆔 `{ind['id']}`")
-                            
-                            if ind['topics']:
-                                topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'][:5]])
-                                st.markdown(topics_html, unsafe_allow_html=True)
-                        
                         with col2:
                             if st.button("📈 Query", key=f"query_{ind['id']}", use_container_width=True):
                                 st.session_state.selected_indicator = ind
                                 st.session_state.query_database = ind['database_id']
-                                st.session_state.show_query_tab = True
                                 st.rerun()
-                        
                         st.markdown("---")
-        else:
-            st.info("💡 **No indicators found.** Try:")
-            st.markdown("""
-            - Adjusting your search terms
-            - Removing some filters
-            - Browsing the **Browse Datasets** tab to explore available data
-            """)
     else:
-        st.info("👋 **Welcome to Indicator Explorer!**")
-        st.markdown("""
-        ### How to get started:
-        
-        1. **🔍 Enter a search term** above (e.g., "GDP", "education", "health")
-        2. **📚 Apply filters** at the top of the page (Themes or Organizations)
-        3. **🚀 Click Search** to find indicators
-        
-        ### 💡 Example searches to try:
-        
-        - `population` - Find population statistics
-        - `GDP` - Economic growth indicators
-        - `climate` or `emissions` - Environmental data
-        - `education` or `literacy` - Education statistics
-        - `health` or `mortality` - Health indicators
-        
-        ### Or try these shortcuts:
-        """)
-        
-        quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
-        
-        with quick_col1:
-            if st.button("📊 Search GDP", use_container_width=True, key="quick_gdp"):
-                st.session_state.quick_search = "GDP"
-                st.rerun()
-        with quick_col2:
-            if st.button("👥 Search Population", use_container_width=True, key="quick_pop"):
-                st.session_state.quick_search = "population"
-                st.rerun()
-        with quick_col3:
-            if st.button("🌡️ Search Climate", use_container_width=True, key="quick_climate"):
-                st.session_state.quick_search = "climate emissions"
-                st.rerun()
-        with quick_col4:
-            if st.button("🎓 Search Education", use_container_width=True, key="quick_edu"):
-                st.session_state.quick_search = "education"
-                st.rerun()
-        
-        if 'quick_search' in st.session_state:
-            with st.spinner(f"Searching for {st.session_state.quick_search}..."):
-                indicators, total_count = search_indicators_filtered(
-                    query=st.session_state.quick_search,
-                    themes=None,
-                    organizations=None,
-                    databases=None,
-                    limit=100
-                )
-                st.session_state.last_search_results = {'indicators': indicators, 'total_count': total_count}
-                del st.session_state.quick_search
-                st.rerun()
+        st.info("👋 Enter search term or use Browse Datasets tab")
 
-
-# ============================================================================
 # TAB 3: QUERY & VISUALIZE
-# ============================================================================
-
 with tab3:
     st.markdown("## Query & Visualize Data")
     
-    # Auto-load indicators if coming from Browse/Explore with a selection
     if 'selected_indicator' in st.session_state:
         ind = st.session_state.selected_indicator
         current_db = ind['database_id']
         
-        # Auto-load indicators if not already loaded for this database
         if 'available_indicators' not in st.session_state or st.session_state.get('query_database') != current_db:
-            with st.spinner(f"Loading indicators from {DATABASE_CATALOG.get(current_db, {}).get('name', current_db)}..."):
+            with st.spinner(f"Loading..."):
                 st.session_state.available_indicators = get_indicators_with_metadata(current_db)
                 st.session_state.query_database = current_db
                 st.session_state.last_selected_db = current_db
         
-        # Only show selection banner if we haven't loaded indicators yet or just arrived
         if not st.session_state.get('indicators_loaded_once', False):
-            # Show selection banner
             col1, col2 = st.columns([5, 1])
             with col1:
                 st.success(f"✅ Pre-selected: **{ind['name']}**")
             with col2:
-                if st.button("❌", key="clear_selection", help="Clear selection"):
+                if st.button("❌", key="clear_selection"):
                     del st.session_state.selected_indicator
                     st.rerun()
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Get current database selection
         current_db = st.session_state.get('query_database', 'WB_WDI')
+        selected_db = st.selectbox("Database", st.session_state.databases,
+                                   index=st.session_state.databases.index(current_db) if current_db in st.session_state.databases else 0,
+                                   key="query_db_select")
         
-        selected_db = st.selectbox(
-            "Database",
-            st.session_state.databases,
-            index=st.session_state.databases.index(current_db) if current_db in st.session_state.databases else 0,
-            key="query_db_select",
-            help="Select a database to query"
-        )
-        
-        # Detect database change
         if 'last_selected_db' not in st.session_state:
             st.session_state.last_selected_db = selected_db
         
         if selected_db != st.session_state.last_selected_db:
-            # Database changed - clear everything
             st.session_state.last_selected_db = selected_db
             st.session_state.query_database = selected_db
-            if 'available_indicators' in st.session_state:
-                del st.session_state.available_indicators
-            if 'selected_indicator' in st.session_state:
-                del st.session_state.selected_indicator
-            if 'indicators_loaded_once' in st.session_state:
-                del st.session_state.indicators_loaded_once
-            st.info(f"🔄 Database changed to {DATABASE_CATALOG.get(selected_db, {}).get('name', selected_db)}. Click 'Load Indicators' to see available indicators.")
+            for key in ['available_indicators', 'selected_indicator', 'indicators_loaded_once']:
+                st.session_state.pop(key, None)
     
     with col2:
         if st.button("📋 Load Indicators", use_container_width=True, type="primary"):
-            with st.spinner(f"Loading indicators from {DATABASE_CATALOG.get(selected_db, {}).get('name', selected_db)}..."):
-                # Clear old selection when loading new indicators
-                if 'selected_indicator' in st.session_state:
-                    del st.session_state.selected_indicator
-                
-                # Mark that we've loaded indicators manually
+            with st.spinner("Loading..."):
+                st.session_state.pop('selected_indicator', None)
                 st.session_state.indicators_loaded_once = True
-                
                 st.session_state.available_indicators = get_indicators_with_metadata(selected_db)
                 st.session_state.query_database = selected_db
                 st.success(f"✅ Loaded {len(st.session_state.available_indicators)} indicators")
                 time.sleep(0.5)
-                st.rerun()  # Force refresh to update dropdown
+                st.rerun()
     
     with col3:
         indicator_count = len(st.session_state.get('available_indicators', []))
@@ -2173,140 +1538,111 @@ with tab3:
     if 'available_indicators' in st.session_state and st.session_state.available_indicators:
         indicator_names = {ind['id']: ind['name'] for ind in st.session_state.available_indicators}
         
-        # Determine default selection
-        default_indicator = None
         default_index = 0
-        
         if 'selected_indicator' in st.session_state:
             ind = st.session_state.selected_indicator
-            # Only use pre-selected if it's from the same database and exists in loaded indicators
             if ind['database_id'] == selected_db and ind['id'] in indicator_names:
-                default_indicator = ind['id']
-                default_index = list(indicator_names.keys()).index(default_indicator)
+                default_index = list(indicator_names.keys()).index(ind['id'])
         
-        selected_indicator_id = st.selectbox(
-            "Select Indicator",
-            options=list(indicator_names.keys()),
-            format_func=lambda x: f"{indicator_names[x][:90]}{'...' if len(indicator_names[x]) > 90 else ''}",
-            index=default_index,
-            key="query_indicator_select",
-            help="Choose an indicator to query"
-        )
+        selected_indicator_id = st.selectbox("Select Indicator", options=list(indicator_names.keys()),
+                                            format_func=lambda x: f"{indicator_names[x][:90]}{'...' if len(indicator_names[x]) > 90 else ''}",
+                                            index=default_index, key="query_indicator_select")
         
-        # Update session state with current selection
+        if 'selected_indicator' in st.session_state:
+            if selected_indicator_id != st.session_state.selected_indicator.get('id'):
+                st.session_state.indicators_loaded_once = True
+        
         selected_ind_details = next((ind for ind in st.session_state.available_indicators if ind['id'] == selected_indicator_id), None)
-    else:
-        # No indicators loaded yet
-        st.warning("⚠️ No indicators loaded. Click '📋 Load Indicators' button above to get started.")
-        st.info("""
-        **Quick start:**
-        1. Select a database from the dropdown above
-        2. Click the '📋 Load Indicators' button
-        3. Choose an indicator from the list that appears
-        4. Set your query parameters and click 'Fetch Data'
         
-        **Or:** Go to the '🗂️ Browse Datasets' tab and click 'Explore' on any database to browse indicators visually.
-        """)
-        selected_ind_details = None
         if selected_ind_details:
-            with st.expander("ℹ️ Indicator Details", expanded=False):
+            with st.expander("ℹ️ Details", expanded=False):
                 st.markdown(f"**Name:** {selected_ind_details['name']}")
                 st.markdown(f"**ID:** `{selected_ind_details['id']}`")
                 if selected_ind_details['description']:
                     st.markdown(f"**Description:** {selected_ind_details['description']}")
-                if selected_ind_details['topics']:
-                    topics_html = " ".join([f'<span class="tag">{t}</span>' for t in selected_ind_details['topics']])
-                    st.markdown(f"**Topics:** {topics_html}", unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        st.markdown("### 🎯 Query Parameters")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            countries_input = st.text_input(
-                "Countries (comma-separated)",
-                value="USA,GBR,DEU,FRA,JPN",
-                help="Use ISO 3-letter country codes",
-                key="query_countries"
-            )
-        
-        with col2:
-            year_from = st.text_input("From Year", "2010", key="query_year_from")
-        
-        with col3:
-            year_to = st.text_input("To Year", "2023", key="query_year_to")
-        
-        if st.button("🚀 Fetch Data", type="primary", use_container_width=True):
-            countries_list = [c.strip().upper() for c in countries_input.split(",") if c.strip()]
             
-            if countries_list:
-                with st.spinner("Fetching data..."):
-                    data = fetch_data_cached(
-                        selected_db,
-                        selected_indicator_id,
-                        countries_list,
-                        year_from,
-                        year_to
-                    )
-                    
-                    if data:
-                        st.session_state.current_data = data
-                        st.session_state.current_indicator_name = indicator_names[selected_indicator_id]
-                        st.success(f"✅ Fetched {len(data)} records")
-                    else:
-                        st.warning("⚠️ No data found for the selected parameters")
+            st.markdown("---")
+            st.markdown("### 🎯 Query Parameters")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                countries_input = st.text_input("Countries", value="USA,GBR,DEU,FRA,JPN", key="query_countries")
+            with col2:
+                year_from = st.text_input("From Year", "2010", key="query_year_from")
+            with col3:
+                year_to = st.text_input("To Year", "2023", key="query_year_to")
+            
+            if st.button("🚀 Fetch Data", type="primary", use_container_width=True):
+                countries_list = [c.strip().upper() for c in countries_input.split(",") if c.strip()]
+                
+                if countries_list:
+                    with st.spinner("Fetching..."):
+                        data = fetch_data_cached(selected_db, selected_indicator_id, countries_list, year_from, year_to)
+                        
+                        if data and len(data) > 0:
+                            st.session_state.current_data = data
+                            st.session_state.current_indicator_name = indicator_names[selected_indicator_id]
+                            st.session_state.current_indicator_id = selected_indicator_id
+                            st.success(f"✅ Fetched {len(data)} records!")
+                            st.balloons()
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ No data found")
+                else:
+                    st.error("❌ Enter at least one country")
+    else:
+        st.info("👋 Select database and click 'Load Indicators'")
     
-    if st.session_state.current_data:
+    # VISUALIZATIONS
+    if 'current_data' in st.session_state and st.session_state.current_data:
         st.markdown("---")
         st.markdown("## 📊 Data Visualization")
         
+        indicator_name = st.session_state.get('current_indicator_name', 'Selected Indicator')
         df = pd.DataFrame(st.session_state.current_data)
-        df['OBS_VALUE'] = pd.to_numeric(df['OBS_VALUE'], errors='coerce')
-        df['TIME_PERIOD'] = df['TIME_PERIOD'].astype(str)
-        df = df.dropna(subset=['OBS_VALUE'])
         
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("📈 Total Records", f"{len(df):,}")
-        with col2:
-            st.metric("🌍 Countries", df['REF_AREA'].nunique())
-        with col3:
-            st.metric("📅 Time Range", f"{df['TIME_PERIOD'].min()}-{df['TIME_PERIOD'].max()}")
-        with col4:
-            st.metric("📊 Avg Value", f"{df['OBS_VALUE'].mean():.2f}")
-        
-        viz_tab1, viz_tab2, viz_tab3 = st.tabs(["📈 Time Series", "📊 Comparison", "📋 Data Table"])
-        
-        with viz_tab1:
-            fig = create_time_series_plot(
-                df,
-                "Time Series Analysis",
-                st.session_state.current_indicator_name
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with viz_tab2:
-            available_years = sorted(df['TIME_PERIOD'].unique(), reverse=True)
-            selected_year = st.selectbox("Select Year", available_years, key="comparison_year")
+        if len(df) == 0:
+            st.warning("⚠️ No records returned")
+        else:
+            df['OBS_VALUE'] = pd.to_numeric(df['OBS_VALUE'], errors='coerce')
+            df['TIME_PERIOD'] = df['TIME_PERIOD'].astype(str)
+            df = df.dropna(subset=['OBS_VALUE'])
             
-            fig = create_comparison_chart(df, selected_year, "Country Comparison")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with viz_tab3:
-            st.dataframe(df, use_container_width=True, height=500)
-        
-        st.markdown("---")
-        csv = df.to_csv(index=False)
-        st.download_button(
-            "📥 Download Data (CSV)",
-            csv,
-            f"data360_{selected_db}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            "text/csv",
-            use_container_width=True
-        )
+            if len(df) == 0:
+                st.warning("⚠️ No valid data")
+            else:
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("📈 Records", f"{len(df):,}")
+                with col2:
+                    st.metric("🌍 Countries", df['REF_AREA'].nunique())
+                with col3:
+                    st.metric("📅 Range", f"{df['TIME_PERIOD'].min()}-{df['TIME_PERIOD'].max()}")
+                with col4:
+                    st.metric("📊 Avg", f"{df['OBS_VALUE'].mean():.2f}")
+                
+                viz_tab1, viz_tab2, viz_tab3 = st.tabs(["📈 Time Series", "📊 Comparison", "📋 Table"])
+                
+                with viz_tab1:
+                    fig = create_time_series_plot(df, "Time Series", indicator_name)
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with viz_tab2:
+                    years = sorted(df['TIME_PERIOD'].unique(), reverse=True)
+                    if len(years) > 0:
+                        year = st.selectbox("Year", years, key="comp_year")
+                        fig = create_comparison_chart(df, year, "Comparison")
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                with viz_tab3:
+                    st.dataframe(df, use_container_width=True, height=500)
+                
+                st.markdown("---")
+                csv = df.to_csv(index=False)
+                st.download_button("📥 Download CSV", csv,
+                                 f"data360_{st.session_state.get('current_indicator_id', 'data')}_{datetime.now().strftime('%Y%m%d')}.csv",
+                                 "text/csv", use_container_width=True)
 
 
 # ============================================================================
@@ -2388,7 +1724,7 @@ with tab4:
             if st.button(db, key=f"catalog_db_{db}", use_container_width=True):
                 st.info(f"Selected: {display_databases[db]['name']}")
 
-
+    
 # ============================================================================
 # TAB 5: BATCH DOWNLOAD
 # ============================================================================
@@ -2523,19 +1859,11 @@ with tab5:
             else:
                 st.error("No data was retrieved. Please check your selections.")
 
-
-# ============================================================================
-# FOOTER
-# ============================================================================
-
+# Footer
 st.markdown("---")
-st.markdown(
-    f"""
-    <div style='text-align: center; color: #666; font-size: 12px; padding: 20px;'>
+st.markdown(f"""
+    <div style='text-align: center; color: #666; padding: 20px;'>
         <p>🌍 <b>Data360 Explorer</b> | Powered by World Bank Data360 API</p>
-        <p>Databases: {len(st.session_state.databases)} | Active filters: {len(st.session_state.selected_themes) + len(st.session_state.selected_databases)}</p>
-        <p style='margin-top: 10px; color: #888;'>Built with Streamlit • Dark Mode Optimized</p>
+        <p>Built with Streamlit • Dark Mode Optimized • All Fixed!</p>
     </div>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
