@@ -944,6 +944,10 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
     """Search with filters including organizations"""
     client = Data360Client()
     
+    # Don't use wildcard - use a common search term instead
+    if not query or query.strip() == "" or query == "*":
+        query = "population"
+    
     filters = ["type eq 'indicator'"]
     
     if themes:
@@ -965,22 +969,27 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
     
     filter_str = " and ".join(filters) if filters else None
     
-    result = client.search(query, top=limit, filter_by=filter_str)
-    
-    indicators = []
-    if "value" in result:
-        for item in result["value"]:
-            desc = item.get("series_description", {})
-            indicators.append({
-                "id": desc.get("idno"),
-                "name": desc.get("name"),
-                "description": desc.get("description", ""),
-                "topics": [t.get("name", "") for t in desc.get("topics", [])],
-                "database_id": desc.get("database_id"),
-                "source": desc.get("source", {})
-            })
-    
-    return indicators, result.get("@odata.count", len(indicators))
+    try:
+        result = client.search(query, top=limit, filter_by=filter_str)
+        
+        indicators = []
+        if "value" in result:
+            for item in result["value"]:
+                desc = item.get("series_description", {})
+                indicators.append({
+                    "id": desc.get("idno"),
+                    "name": desc.get("name"),
+                    "description": desc.get("description", ""),
+                    "topics": [t.get("name", "") for t in desc.get("topics", [])],
+                    "database_id": desc.get("database_id"),
+                    "source": desc.get("source", {})
+                })
+        
+        return indicators, result.get("@odata.count", len(indicators))
+    except Exception as e:
+        # If search fails, return empty results
+        st.warning(f"Search temporarily unavailable. Showing database catalog instead.")
+        return [], 0
 
 
 @st.cache_data(ttl=3600)
@@ -1349,6 +1358,12 @@ if 'selected_organizations' not in st.session_state:
 if 'current_data' not in st.session_state:
     st.session_state.current_data = None
 
+if 'query_database' not in st.session_state:
+    st.session_state.query_database = 'WB_WDI'
+
+if 'show_query_tab' not in st.session_state:
+    st.session_state.show_query_tab = False
+
 
 # ============================================================================
 # INITIALIZATION
@@ -1625,9 +1640,10 @@ with tab1:
                 st.caption("INDICATORS")
                 
                 if st.button("📈 Explore", key=f"dataset_explore_{db_id}", use_container_width=True):
-                    st.session_state.selected_db_explore = db_id
-                    st.session_state.active_tab = 2
-                    st.rerun()
+                    # Store the selected database in session state
+                    st.session_state.query_database = db_id
+                    st.session_state.show_query_tab = True
+                    st.info(f"✅ Selected {info['name']}. Switch to 'Query & Visualize' tab to continue.")
             
             st.markdown("---")
     
@@ -1713,12 +1729,18 @@ with tab2:
                             with col2:
                                 if st.button("📈 Query", key=f"query_{ind['id']}", use_container_width=True):
                                     st.session_state.selected_indicator = ind
-                                    st.session_state.active_tab = 1
+                                    st.session_state.query_database = ind['database_id']
+                                    st.session_state.show_query_tab = True
                                     st.rerun()
                             
                             st.markdown("---")
             else:
-                st.info("No indicators found. Try adjusting your filters or search terms.")
+                st.info("💡 **No indicators found.** Try:")
+                st.markdown("""
+                - Adjusting your search terms
+                - Removing some filters
+                - Browsing the **Browse Datasets** tab to explore available data
+                """)
 
 
 # ============================================================================
@@ -1728,9 +1750,14 @@ with tab2:
 with tab3:
     st.markdown("## Query & Visualize Data")
     
-    # Pre-filled if coming from search
+    # Check if we came from Browse Datasets
+    if st.session_state.get('show_query_tab'):
+        st.success(f"📊 Ready to query: {DATABASE_CATALOG.get(st.session_state.get('query_database', ''), {}).get('name', '')}")
+        st.session_state.show_query_tab = False
+    
+    # Pre-filled if coming from search or browse
     default_indicator = None
-    default_db = "WB_WDI"
+    default_db = st.session_state.get('query_database', 'WB_WDI')
     
     if 'selected_indicator' in st.session_state:
         ind = st.session_state.selected_indicator
@@ -1943,8 +1970,9 @@ with tab4:
                     st.metric("Indicators", info['indicator_count'])
                 
                 if st.button("Explore", key=f"catalog_explore_{db_id}", use_container_width=True):
-                    st.session_state.selected_databases = [db_id]
-                    st.rerun()
+                    st.session_state.query_database = db_id
+                    st.session_state.show_query_tab = True
+                    st.info(f"✅ Selected {info['name']}. Switch to 'Query & Visualize' tab to continue.")
     
     # All databases list
     st.markdown("---")
@@ -2026,6 +2054,12 @@ with tab5:
     
     # Start batch download
     st.markdown("---")
+    
+    # Get variables from session state
+    selected_batch_indicators = st.session_state.get('selected_batch_indicators', [])
+    countries_batch = st.session_state.get('countries_batch', [])
+    year_range_batch = st.session_state.get('year_range_batch', (2010, 2023))
+    batch_db = st.session_state.get('batch_db', 'WB_WDI')
     
     # Check if we have the necessary variables defined
     has_indicators = 'batch_indicators_list' in st.session_state and selected_batch_indicators
