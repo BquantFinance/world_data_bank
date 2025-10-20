@@ -34,7 +34,7 @@ class Data360Client:
         
         # Replace wildcard or empty search with a common term
         if not query or query.strip() == "" or query == "*":
-            query = "population"
+            query = "GDP"
         
         payload = {
             "count": True,
@@ -54,7 +54,11 @@ class Data360Client:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            # Return empty result on error
+            # Return empty result on error but log it
+            print(f"Search API Error: {str(e)}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"Response status: {e.response.status_code}")
+                print(f"Response body: {e.response.text}")
             return {"value": [], "@odata.count": 0}
     
     def list_indicators(self, database_id: str) -> List[str]:
@@ -947,14 +951,11 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
     client = Data360Client()
     
     if not query or query.strip() == "" or query == "*":
-        query = "population"
+        query = "GDP"
     
-    filters = ["type eq 'indicator'"]
+    filters = []
     
-    if themes:
-        theme_filter = " or ".join([f"series_description/topics/any(t: t/name eq '{theme}')" for theme in themes])
-        filters.append(f"({theme_filter})")
-    
+    # Build database filter from organizations or direct database selection
     if organizations:
         org_databases = [
             db_id for db_id, info in DATABASE_CATALOG.items()
@@ -967,27 +968,38 @@ def search_indicators_filtered(query: str, themes: List[str] = None,
         db_filter = " or ".join([f"series_description/database_id eq '{db}'" for db in databases])
         filters.append(f"({db_filter})")
     
+    # Add theme filter if specified
+    if themes:
+        theme_filter = " or ".join([f"series_description/topics/any(t: t/name eq '{theme}')" for theme in themes])
+        filters.append(f"({theme_filter})")
+    
     filter_str = " and ".join(filters) if filters else None
     
     try:
         result = client.search(query, top=limit, filter_by=filter_str)
         
         indicators = []
-        if "value" in result:
+        if "value" in result and result["value"]:
             for item in result["value"]:
                 desc = item.get("series_description", {})
-                indicators.append({
-                    "id": desc.get("idno"),
-                    "name": desc.get("name"),
-                    "description": desc.get("description", ""),
-                    "topics": [t.get("name", "") for t in desc.get("topics", [])],
-                    "database_id": desc.get("database_id"),
-                    "source": desc.get("source", {})
-                })
+                # Only include items that have an idno (indicators)
+                if desc.get("idno"):
+                    indicators.append({
+                        "id": desc.get("idno"),
+                        "name": desc.get("name"),
+                        "description": desc.get("description", ""),
+                        "topics": [t.get("name", "") for t in desc.get("topics", [])],
+                        "database_id": desc.get("database_id"),
+                        "source": desc.get("source", {})
+                    })
         
         return indicators, result.get("@odata.count", len(indicators))
     except Exception as e:
-        st.warning(f"Search temporarily unavailable. Showing database catalog instead.")
+        # Show actual error for debugging
+        import traceback
+        error_msg = str(e)
+        st.error(f"Search failed: {error_msg}")
+        st.code(traceback.format_exc())
         return [], 0
 
 
@@ -1695,6 +1707,9 @@ with tab1:
 with tab2:
     st.markdown("## Explore Indicators")
     
+    # Debug toggle
+    show_debug = st.checkbox("🐛 Show debug info", value=False, key="debug_mode")
+    
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
@@ -1729,13 +1744,22 @@ with tab2:
     if st.button("🚀 Search", type="primary", use_container_width=True):
         if search_query or st.session_state.selected_themes or st.session_state.get('selected_organizations'):
             with st.spinner("Searching indicators..."):
+                if show_debug:
+                    st.info(f"Search query: {search_query}")
+                    st.info(f"Themes: {st.session_state.selected_themes}")
+                    st.info(f"Organizations: {st.session_state.get('selected_organizations')}")
+                
                 indicators, total_count = search_indicators_filtered(
-                    query=search_query if search_query else "population",
+                    query=search_query if search_query else "GDP",
                     themes=st.session_state.selected_themes if st.session_state.selected_themes else None,
                     organizations=st.session_state.get('selected_organizations') if st.session_state.get('selected_organizations') else None,
                     databases=st.session_state.selected_databases if st.session_state.selected_databases else None,
                     limit=100
                 )
+                
+                if show_debug:
+                    st.info(f"Found {len(indicators)} indicators, total count: {total_count}")
+                
                 st.session_state.last_search_results = {'indicators': indicators, 'total_count': total_count}
                 st.rerun()
         else:
@@ -1745,7 +1769,40 @@ with tab2:
         indicators = st.session_state.last_search_results['indicators']
         total_count = st.session_state.last_search_results['total_count']
         
-        st.markdown(f"### Results: Showing **{len(indicators)}** of **{total_count}** indicators")
+        if len(indicators) == 0:
+            st.warning("⚠️ **No results found from API search**")
+            st.info("""
+            **The Data360 search API may have issues. Try these alternatives:**
+            
+            1. **🗂️ Browse Datasets Tab** - Works reliably! Click on any database, then "Explore" to see all its indicators
+            2. **Try simpler search terms** - Use single words like "GDP", "population", "health"
+            3. **Remove filters** - Clear themes/organizations and try again
+            4. **Use Quick Search buttons** below
+            """)
+            
+            # Show quick database shortcuts
+            st.markdown("### 🚀 Quick Access to Popular Databases:")
+            quick_col1, quick_col2, quick_col3 = st.columns(3)
+            
+            with quick_col1:
+                if st.button("📊 World Development Indicators (WB_WDI)", key="quick_wdi", use_container_width=True):
+                    st.session_state.exploring_database = "WB_WDI"
+                    st.session_state.exploring_db_name = "World Development Indicators"
+                    st.info("✅ Go to 'Browse Datasets' tab to see 1,508 indicators!")
+            
+            with quick_col2:
+                if st.button("💰 World Economic Outlook (IMF_WEO)", key="quick_weo", use_container_width=True):
+                    st.session_state.exploring_database = "IMF_WEO"
+                    st.session_state.exploring_db_name = "World Economic Outlook"
+                    st.info("✅ Go to 'Browse Datasets' tab to see indicators!")
+            
+            with quick_col3:
+                if st.button("🏛️ Governance Indicators (WB_WGI)", key="quick_wgi", use_container_width=True):
+                    st.session_state.exploring_database = "WB_WGI"
+                    st.session_state.exploring_db_name = "Worldwide Governance Indicators"
+                    st.info("✅ Go to 'Browse Datasets' tab to see indicators!")
+        else:
+            st.markdown(f"### Results: Showing **{len(indicators)}** of **{total_count}** indicators")
         
         if indicators:
             by_database = defaultdict(list)
@@ -2215,7 +2272,7 @@ st.markdown(
     <div style='text-align: center; color: #666; font-size: 12px; padding: 20px;'>
         <p>🌍 <b>Data360 Explorer</b> | Powered by World Bank Data360 API</p>
         <p>Databases: {len(st.session_state.databases)} | Active filters: {len(st.session_state.selected_themes) + len(st.session_state.selected_databases)}</p>
-        <p style='margin-top: 10px; color: #888;'>Made by @Gsnchez • Dark Mode Optimized</p>
+        <p style='margin-top: 10px; color: #888;'>Built with Streamlit • Dark Mode Optimized</p>
     </div>
     """,
     unsafe_allow_html=True
