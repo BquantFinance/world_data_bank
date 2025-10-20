@@ -919,18 +919,43 @@ def discover_databases():
 
 @st.cache_data(ttl=3600)
 def get_indicators_with_metadata(database_id: str, limit: int = 500):
-    """Get indicators with their metadata - uses /indicators endpoint instead of search"""
+    """Get indicators with their metadata - uses search API to get full metadata"""
     client = Data360Client()
     
     try:
+        # First, try using the search API to get rich metadata
+        # Search for all indicators in this database
+        filter_str = f"series_description/database_id eq '{database_id}'"
+        result = client.search("*", top=min(limit, 1000), filter_by=filter_str)
+        
+        indicators = []
+        if "value" in result and result["value"]:
+            for item in result["value"]:
+                desc = item.get("series_description", {})
+                if desc.get("idno"):
+                    indicators.append({
+                        "id": desc.get("idno"),
+                        "name": desc.get("name", desc.get("idno", "").replace(f"{database_id}_", "").replace("_", " ").title()),
+                        "description": desc.get("description", ""),
+                        "topics": [t.get("name", "") for t in desc.get("topics", [])],
+                        "source": desc.get("source", {}),
+                        "database_id": database_id
+                    })
+            
+            if indicators:
+                return indicators[:limit]
+        
+        # Fallback: use /indicators endpoint if search fails
         indicator_ids = client.list_indicators(database_id)
         
         indicators = []
         for ind_id in indicator_ids[:limit]:
+            # Create a more readable name from the ID
+            readable_name = ind_id.replace(f"{database_id}_", "").replace("_", " ").title()
             indicators.append({
                 "id": ind_id,
-                "name": ind_id.replace(f"{database_id}_", "").replace("_", " ").title(),
-                "description": "",
+                "name": readable_name,
+                "description": f"Indicator from {database_id}",
                 "topics": [],
                 "source": {},
                 "database_id": database_id
@@ -938,7 +963,7 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
         
         return indicators
     except Exception as e:
-        st.warning(f"Could not load indicators for {database_id}. Using indicator query instead.")
+        st.error(f"Could not load indicators for {database_id}: {str(e)}")
         return []
 
 
@@ -1536,7 +1561,108 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 
 with tab1:
     st.markdown("## Browse Datasets")
-    st.markdown("Explore available datasets with detailed information")
+    
+    # ========================================================================
+    # SHOW INDICATORS FIRST IF EXPLORING A DATABASE
+    # ========================================================================
+    if 'exploring_database' in st.session_state and st.session_state.exploring_database:
+        st.markdown(f"## 🔍 Exploring: {st.session_state.get('exploring_db_name', 'Database')}")
+        
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            db_info = DATABASE_CATALOG.get(st.session_state.exploring_database, {})
+            st.info(f"📊 Database: `{st.session_state.exploring_database}` | 🏢 {db_info.get('organization', 'Unknown')}")
+        with col2:
+            if st.button("❌ Close", key="close_explore", use_container_width=True):
+                del st.session_state.exploring_database
+                del st.session_state.exploring_db_name
+                st.rerun()
+        
+        with st.spinner(f"🔄 Loading indicators from {st.session_state.exploring_database}... This may take a moment."):
+            explore_indicators = get_indicators_with_metadata(st.session_state.exploring_database, limit=200)
+            
+            if explore_indicators:
+                st.success(f"✅ Loaded {len(explore_indicators)} indicators")
+                
+                # Search within these indicators
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    indicator_search = st.text_input(
+                        "🔎 Filter indicators by name or ID",
+                        placeholder="e.g., population, GDP, health...",
+                        key="explore_indicator_search"
+                    )
+                with col2:
+                    st.metric("Total", len(explore_indicators))
+                
+                # Filter indicators
+                if indicator_search:
+                    search_lower = indicator_search.lower()
+                    filtered_explore = [
+                        ind for ind in explore_indicators 
+                        if search_lower in ind['name'].lower() 
+                        or search_lower in ind['id'].lower()
+                        or (ind.get('description') and search_lower in ind['description'].lower())
+                    ]
+                else:
+                    filtered_explore = explore_indicators[:50]  # Show first 50
+                
+                if indicator_search and not filtered_explore:
+                    st.warning(f"No indicators match '{indicator_search}'. Try a different search term.")
+                    filtered_explore = explore_indicators[:20]  # Show first 20 as fallback
+                
+                st.markdown(f"### Showing {len(filtered_explore)} indicators")
+                
+                for ind in filtered_explore:
+                    with st.container():
+                        col1, col2 = st.columns([5, 1])
+                        
+                        with col1:
+                            # Show name prominently
+                            st.markdown(f"**{ind['name']}**")
+                            
+                            # Show ID in smaller text
+                            st.caption(f"🆔 `{ind['id']}`")
+                            
+                            # Show description if available
+                            if ind.get('description') and ind['description'] != f"Indicator from {st.session_state.exploring_database}":
+                                desc_text = ind['description'][:200] + "..." if len(ind.get('description', '')) > 200 else ind.get('description', '')
+                                st.markdown(f"*{desc_text}*")
+                            
+                            # Show topics/tags if available
+                            if ind.get('topics') and any(ind.get('topics', [])):
+                                topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'][:3] if t])
+                                st.markdown(topics_html, unsafe_allow_html=True)
+                        
+                        with col2:
+                            if st.button("📊 Query", key=f"explore_query_{ind['id']}", use_container_width=True):
+                                st.session_state.selected_indicator = ind
+                                st.session_state.query_database = st.session_state.exploring_database
+                                st.session_state.active_tab = "Query & Visualize"
+                                st.success(f"✅ Selected indicator. Go to 'Query & Visualize' tab.")
+                        
+                        st.markdown("---")
+            else:
+                st.warning("⚠️ No indicators could be loaded from this database.")
+                st.info("This might be because:")
+                st.markdown("""
+                - The database ID is incorrect
+                - The API is temporarily unavailable
+                - The database has restricted access
+                
+                **Try another database from the list below.**
+                """)
+        
+        st.markdown("---")
+        st.markdown("### 📚 Browse Other Databases")
+        st.markdown("Select a different database to explore its indicators:")
+        st.markdown("---")
+    else:
+        st.markdown("Explore available datasets with detailed information")
+    
+    # ========================================================================
+    # DATASET LIST (now appears below indicators if exploring)
+    # ========================================================================
     
     col1, col2, col3 = st.columns([3, 1, 1])
     
@@ -1635,69 +1761,13 @@ with tab1:
                 if st.button("📈 Explore", key=f"dataset_explore_{db_id}", use_container_width=True):
                     st.session_state.exploring_database = db_id
                     st.session_state.exploring_db_name = info['name']
+                    # Rerun to show indicators at top
                     st.rerun()
             
             st.markdown("---")
     
     if total_count > items_per_page:
         st.info(f"Showing first {items_per_page} datasets. Use filters to narrow results or increase items per page.")
-    
-    if 'exploring_database' in st.session_state and st.session_state.exploring_database:
-        st.markdown("---")
-        st.markdown(f"## 🔍 Exploring: {st.session_state.get('exploring_db_name', 'Database')}")
-        
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            st.info(f"📊 Database: `{st.session_state.exploring_database}`")
-        with col2:
-            if st.button("❌ Close", key="close_explore", use_container_width=True):
-                del st.session_state.exploring_database
-                del st.session_state.exploring_db_name
-                st.rerun()
-        
-        with st.spinner(f"Loading indicators from {st.session_state.exploring_database}..."):
-            explore_indicators = get_indicators_with_metadata(st.session_state.exploring_database, limit=100)
-            
-            if explore_indicators:
-                st.success(f"✅ Found {len(explore_indicators)} indicators")
-                
-                indicator_search = st.text_input(
-                    "🔎 Filter indicators",
-                    placeholder="Search within this database...",
-                    key="explore_indicator_search"
-                )
-                
-                if indicator_search:
-                    filtered_explore = [
-                        ind for ind in explore_indicators 
-                        if indicator_search.lower() in ind['name'].lower() 
-                        or indicator_search.lower() in ind['id'].lower()
-                    ]
-                else:
-                    filtered_explore = explore_indicators[:50]
-                
-                st.markdown(f"### Showing {len(filtered_explore)} indicators")
-                
-                for ind in filtered_explore:
-                    with st.container():
-                        col1, col2 = st.columns([5, 1])
-                        
-                        with col1:
-                            st.markdown(f"**{ind['name']}**")
-                            st.caption(f"🆔 `{ind['id']}`")
-                            if ind.get('description'):
-                                st.caption(ind['description'][:150] + "..." if len(ind.get('description', '')) > 150 else ind.get('description', ''))
-                        
-                        with col2:
-                            if st.button("📊 Query", key=f"explore_query_{ind['id']}", use_container_width=True):
-                                st.session_state.selected_indicator = ind
-                                st.session_state.query_database = st.session_state.exploring_database
-                                st.session_state.active_tab = "Query & Visualize"
-                                st.success(f"✅ Selected indicator. Go to 'Query & Visualize' tab.")
-                        
-                        st.markdown("---")
-            else:
-                st.warning("⚠️ No indicators found in this database.")
 
 
 # ============================================================================
@@ -2111,8 +2181,11 @@ with tab4:
                 if st.button("Explore", key=f"catalog_explore_{db_id}", use_container_width=True):
                     st.session_state.exploring_database = db_id
                     st.session_state.exploring_db_name = info['name']
-                    st.session_state.active_tab = "Browse Datasets"
-                    st.info(f"✅ Go to 'Browse Datasets' tab to see indicators.")
+                    # Force switch to Browse Datasets tab by rerunning
+                    st.success(f"✅ Loading {info['name']}...")
+                    st.info("🔄 Switching to 'Browse Datasets' tab...")
+                    time.sleep(0.5)
+                    st.rerun()
     
     st.markdown("---")
     st.markdown("### 📚 All Databases")
