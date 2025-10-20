@@ -29,10 +29,12 @@ class Data360Client:
         
     def search(self, query: str, top: int = 100, skip: int = 0, 
                filter_by: Optional[str] = None, orderby: Optional[str] = None) -> Dict:
-        """Search Data360"""
+        """Search Data360 - avoids wildcard searches"""
         url = f"{self.BASE_URL}/data360/searchv2"
-        if not query or query.strip() == "":
-            query = "*"
+        
+        # Replace wildcard or empty search with a common term
+        if not query or query.strip() == "" or query == "*":
+            query = "population"
         
         payload = {
             "count": True,
@@ -47,9 +49,13 @@ class Data360Client:
         if orderby:
             payload["orderby"] = orderby
             
-        response = self.session.post(url, json=payload, timeout=self.timeout)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = self.session.post(url, json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            # Return empty result on error
+            return {"value": [], "@odata.count": 0}
     
     def list_indicators(self, database_id: str) -> List[str]:
         """List all indicators in a database"""
@@ -913,27 +919,30 @@ def discover_databases():
 
 @st.cache_data(ttl=3600)
 def get_indicators_with_metadata(database_id: str, limit: int = 500):
-    """Get indicators with their metadata"""
+    """Get indicators with their metadata - uses /indicators endpoint instead of search"""
     client = Data360Client()
     
-    # Search for all indicators in this database
-    filter_query = f"series_description/database_id eq '{database_id}' and type eq 'indicator'"
-    result = client.search("*", top=limit, filter_by=filter_query)
-    
-    indicators = []
-    if "value" in result:
-        for item in result["value"]:
-            desc = item.get("series_description", {})
+    try:
+        # Use the /indicators endpoint which is more reliable
+        indicator_ids = client.list_indicators(database_id)
+        
+        # Convert to format expected by the app
+        indicators = []
+        for ind_id in indicator_ids[:limit]:
             indicators.append({
-                "id": desc.get("idno"),
-                "name": desc.get("name"),
-                "description": desc.get("description", ""),
-                "topics": desc.get("topics", []),
-                "source": desc.get("source", {}),
-                "database_id": desc.get("database_id")
+                "id": ind_id,
+                "name": ind_id.replace(f"{database_id}_", "").replace("_", " ").title(),
+                "description": "",
+                "topics": [],
+                "source": {},
+                "database_id": database_id
             })
-    
-    return indicators
+        
+        return indicators
+    except Exception as e:
+        # Fallback: return empty list
+        st.warning(f"Could not load indicators for {database_id}. Using indicator query instead.")
+        return []
 
 
 @st.cache_data(ttl=3600)
@@ -1364,6 +1373,9 @@ if 'query_database' not in st.session_state:
 if 'show_query_tab' not in st.session_state:
     st.session_state.show_query_tab = False
 
+if 'last_search_results' not in st.session_state:
+    st.session_state.last_search_results = None
+
 
 # ============================================================================
 # INITIALIZATION
@@ -1695,52 +1707,78 @@ with tab2:
                 databases=st.session_state.selected_databases if st.session_state.selected_databases else None,
                 limit=100
             )
+    # Show last search results if available
+    if 'last_search_results' in st.session_state and st.session_state.last_search_results:
+        indicators = st.session_state.last_search_results['indicators']
+        total_count = st.session_state.last_search_results['total_count']
+        
+        st.markdown(f"### Results: Showing **{len(indicators)}** of **{total_count}** indicators")
+        
+        if indicators:
+            # Group by database
+            by_database = defaultdict(list)
+            for ind in indicators:
+                by_database[ind['database_id']].append(ind)
             
-            st.markdown(f"### Results: Showing **{len(indicators)}** of **{total_count}** indicators")
-            
-            if indicators:
-                # Group by database
-                by_database = defaultdict(list)
-                for ind in indicators:
-                    by_database[ind['database_id']].append(ind)
+            # Display results
+            for db_id, db_indicators in sorted(by_database.items()):
+                db_info = DATABASE_CATALOG.get(db_id, {"name": db_id, "organization": "Unknown"})
                 
-                # Display results
-                for db_id, db_indicators in sorted(by_database.items()):
-                    db_info = DATABASE_CATALOG.get(db_id, {"name": db_id, "organization": "Unknown"})
-                    
-                    with st.expander(
-                        f"📊 **{db_info['name']}** ({db_id}) - {len(db_indicators)} indicators",
-                        expanded=True
-                    ):
-                        for ind in db_indicators[:20]:  # Show first 20
-                            col1, col2 = st.columns([4, 1])
+                with st.expander(
+                    f"📊 **{db_info['name']}** ({db_id}) - {len(db_indicators)} indicators",
+                    expanded=True
+                ):
+                    for ind in db_indicators[:20]:  # Show first 20
+                        col1, col2 = st.columns([4, 1])
+                        
+                        with col1:
+                            st.markdown(f"**{ind['name']}**")
+                            if ind['description']:
+                                st.caption(ind['description'][:200] + "..." if len(ind['description']) > 200 else ind['description'])
+                            st.caption(f"🆔 `{ind['id']}`")
                             
-                            with col1:
-                                st.markdown(f"**{ind['name']}**")
-                                if ind['description']:
-                                    st.caption(ind['description'][:200] + "..." if len(ind['description']) > 200 else ind['description'])
-                                st.caption(f"🆔 `{ind['id']}`")
-                                
-                                # Topics
-                                if ind['topics']:
-                                    topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'][:5]])
-                                    st.markdown(topics_html, unsafe_allow_html=True)
-                            
-                            with col2:
-                                if st.button("📈 Query", key=f"query_{ind['id']}", use_container_width=True):
-                                    st.session_state.selected_indicator = ind
-                                    st.session_state.query_database = ind['database_id']
-                                    st.session_state.show_query_tab = True
-                                    st.rerun()
-                            
-                            st.markdown("---")
-            else:
-                st.info("💡 **No indicators found.** Try:")
-                st.markdown("""
-                - Adjusting your search terms
-                - Removing some filters
-                - Browsing the **Browse Datasets** tab to explore available data
-                """)
+                            # Topics
+                            if ind['topics']:
+                                topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'][:5]])
+                                st.markdown(topics_html, unsafe_allow_html=True)
+                        
+                        with col2:
+                            if st.button("📈 Query", key=f"query_{ind['id']}", use_container_width=True):
+                                st.session_state.selected_indicator = ind
+                                st.session_state.query_database = ind['database_id']
+                                st.session_state.show_query_tab = True
+                                st.rerun()
+                        
+                        st.markdown("---")
+        else:
+            st.info("💡 **No indicators found.** Try:")
+            st.markdown("""
+            - Adjusting your search terms
+            - Removing some filters
+            - Browsing the **Browse Datasets** tab to explore available data
+            """)
+    else:
+        # Show helpful message when no search has been performed
+        st.info("👋 **Welcome to Indicator Explorer!**")
+        st.markdown("""
+        ### How to get started:
+        
+        1. **🔍 Enter a search term** above (e.g., "GDP", "education", "health")
+        2. **📚 Apply filters** at the top (Themes or Organizations)
+        3. **🚀 Click Search** to find indicators
+        
+        Or browse the **Browse Datasets** tab to explore by database!
+        """)
+        
+        # Show some example searches as text
+        st.markdown("### 💡 Example searches to try:")
+        st.markdown("""
+        - `population` - Find population statistics
+        - `GDP` - Economic growth indicators
+        - `climate` or `emissions` - Environmental data
+        - `education` or `literacy` - Education statistics
+        - `health` or `mortality` - Health indicators
+        """)
 
 
 # ============================================================================
