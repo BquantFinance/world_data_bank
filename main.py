@@ -1,7 +1,7 @@
 """
 World Bank Data360 Explorer - Complete Single-File Streamlit App
 Dark mode, elegant, minimalist interface for exploring global data
-FULLY FIXED VERSION - All tabs corrected, no duplication
+STREAMLINED VERSION - 4 tabs, no redundancy
 """
 
 import streamlit as st
@@ -1268,6 +1268,35 @@ with filter_col4:
         st.session_state.selected_organizations = []
         st.rerun()
 
+# Quick search functionality
+if main_search:
+    with st.spinner(f"Searching for '{main_search}'..."):
+        results, total = search_indicators_filtered(
+            query=main_search,
+            themes=st.session_state.selected_themes if st.session_state.selected_themes else None,
+            organizations=st.session_state.selected_organizations if st.session_state.selected_organizations else None,
+            limit=50
+        )
+        
+        if results:
+            st.success(f"Found {len(results)} results for '{main_search}'")
+            
+            with st.expander(f"📋 View {len(results)} Search Results", expanded=True):
+                for result in results[:10]:
+                    col1, col2 = st.columns([5, 1])
+                    with col1:
+                        st.markdown(f"**{result['name']}**")
+                        st.caption(f"🆔 `{result['id']}` | 📊 {result['database_id']}")
+                    with col2:
+                        if st.button("Select", key=f"quick_search_{result['id']}", use_container_width=True):
+                            st.session_state.selected_indicator = result
+                            st.session_state.query_database = result['database_id']
+                            st.toast(f"✅ Selected: {result['name'][:40]}...")
+                    st.markdown("---")
+                
+                if len(results) > 10:
+                    st.info(f"Showing 10 of {len(results)} results. Use filters to narrow down.")
+
 # Stats
 st.markdown("<div style='text-align: center; margin: 20px 0;'><div style='height: 2px; background: linear-gradient(90deg, transparent, #4a9eff, transparent);'></div></div>", unsafe_allow_html=True)
 
@@ -1289,8 +1318,8 @@ with stat_col5:
 
 st.markdown("<div style='text-align: center; margin: 20px 0;'><div style='height: 2px; background: linear-gradient(90deg, transparent, #667eea, transparent);'></div></div>", unsafe_allow_html=True)
 
-# Tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗂️ Browse Datasets", "🔎 Explore Indicators", "📊 Query & Visualize", "🗄️ Database Catalog", "💾 Batch Download"])
+# Tabs - Now only 4!
+tab1, tab2, tab3, tab4 = st.tabs(["🗂️ Browse Datasets", "📊 Query & Visualize", "🗄️ Database Catalog", "💾 Batch Download"])
 
 # ============================================================================
 # TAB 1: BROWSE DATASETS
@@ -1421,121 +1450,17 @@ with tab1:
 
 
 # ============================================================================
-# TAB 2: EXPLORE INDICATORS (Cross-database search)
+# TAB 2: QUERY & VISUALIZE
 # ============================================================================
 
 with tab2:
-    st.markdown("## 🔎 Explore Indicators")
-    st.markdown("Search across all databases to find specific indicators")
-    
-    col1, col2, col3 = st.columns([3, 1, 1])
-    
-    with col1:
-        explore_query = st.text_input("🔍 Search for indicators", placeholder="e.g., GDP per capita, literacy rate, CO2 emissions", key="explore_search_query")
-    
-    with col2:
-        search_limit = st.selectbox("Results", [25, 50, 100, 200], index=1, key="search_limit")
-    
-    with col3:
-        st.markdown("&nbsp;")
-        search_button = st.button("🔎 Search", type="primary", use_container_width=True, key="explore_search_btn")
-    
-    if search_button and explore_query:
-        with st.spinner(f"Searching for '{explore_query}'..."):
-            # Use the global filters from the top of the page
-            results, total = search_indicators_filtered(
-                query=explore_query,
-                themes=st.session_state.selected_themes if st.session_state.selected_themes else None,
-                organizations=st.session_state.selected_organizations if st.session_state.selected_organizations else None,
-                limit=search_limit
-            )
-            
-            st.session_state.search_results = results
-            st.session_state.search_total = total
-    
-    if 'search_results' in st.session_state:
-        results = st.session_state.search_results
-        total = st.session_state.search_total
-        
-        if results:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("🎯 Results Found", len(results))
-            with col2:
-                st.metric("📚 Total Matches", total)
-            with col3:
-                unique_dbs = len(set(r['database_id'] for r in results))
-                st.metric("🗄️ Databases", unique_dbs)
-            
-            st.markdown("---")
-            st.markdown("### 📋 Search Results")
-            
-            for result in results:
-                with st.container():
-                    col1, col2 = st.columns([5, 1])
-                    
-                    with col1:
-                        st.markdown(f"**{result['name']}**")
-                        st.caption(f"🆔 `{result['id']}` | 📊 Database: {result['database_id']}")
-                        
-                        if result.get('description'):
-                            desc = result['description'][:150] + "..." if len(result['description']) > 150 else result['description']
-                            st.markdown(f"*{desc}*")
-                        
-                        db_info = DATABASE_CATALOG.get(result['database_id'], {})
-                        if db_info:
-                            st.markdown(f'<span class="database-badge">{db_info.get("organization", "Unknown")}</span>', unsafe_allow_html=True)
-                        
-                        if result.get('topics'):
-                            topics_html = " ".join([f'<span class="tag">{t}</span>' for t in result['topics'][:4] if t])
-                            st.markdown(topics_html, unsafe_allow_html=True)
-                    
-                    with col2:
-                        if st.button("📊 Select", key=f"search_select_{result['id']}", use_container_width=True):
-                            st.session_state.selected_indicator = result
-                            st.session_state.query_database = result['database_id']
-                            st.toast(f"✅ Selected: {result['name'][:50]}...", icon="✅")
-                            st.info("💡 **Next step:** Go to '📊 Query & Visualize' tab!")
-                            time.sleep(1)
-                    
-                    st.markdown("---")
-        else:
-            st.warning("⚠️ No results found. Try adjusting your search query or filters.")
-    else:
-        st.info("💡 **Tip:** Use the search box above to find indicators across all databases. You can also use the filters at the top of the page to narrow your search by theme or organization.")
-        
-        # Show some example searches
-        st.markdown("### 🎯 Example Searches")
-        example_col1, example_col2, example_col3 = st.columns(3)
-        
-        with example_col1:
-            if st.button("🌍 Climate & Environment", use_container_width=True, key="ex_climate"):
-                st.session_state.example_query = "CO2 emissions"
-                st.rerun()
-        
-        with example_col2:
-            if st.button("💰 Economic Indicators", use_container_width=True, key="ex_economy"):
-                st.session_state.example_query = "GDP growth"
-                st.rerun()
-        
-        with example_col3:
-            if st.button("📚 Education & Health", use_container_width=True, key="ex_education"):
-                st.session_state.example_query = "literacy rate"
-                st.rerun()
-
-
-# ============================================================================
-# TAB 3: QUERY & VISUALIZE
-# ============================================================================
-
-with tab3:
     st.markdown("## Query & Visualize Data")
     
     # Check if we have a pre-selected indicator
     has_preselection = 'selected_indicator' in st.session_state
     
     if has_preselection:
-        # Fast path: User came from Browse/Explore with indicator selected
+        # Fast path: User came from Browse with indicator selected
         ind = st.session_state.selected_indicator
         
         # Show what's selected
@@ -1594,7 +1519,7 @@ with tab3:
     
     else:
         # Manual path: User is selecting indicator manually
-        st.info("💡 **Tip:** Go to the '🗂️ Browse Datasets' or '🔎 Explore Indicators' tab to find and select an indicator visually!")
+        st.info("💡 **Tip:** Go to the '🗂️ Browse Datasets' tab and click 'Explore' on any database to browse indicators visually, or use the search bar at the top!")
         
         st.markdown("### Or select manually:")
         
@@ -1739,10 +1664,10 @@ with tab3:
 
 
 # ============================================================================
-# TAB 4: DATABASE CATALOG
+# TAB 3: DATABASE CATALOG
 # ============================================================================
 
-with tab4:
+with tab3:
     st.markdown("## 🗂️ Database Catalog")
     st.markdown("Browse all available databases and their characteristics")
     
@@ -1785,12 +1710,6 @@ with tab4:
                 if info.get('themes'):
                     themes_html = " ".join([f'<span class="tag">{t}</span>' for t in info['themes']])
                     st.markdown(f"**Themes:** {themes_html}", unsafe_allow_html=True)
-                
-                if info.get('update_frequency'):
-                    st.caption(f"📅 Update Frequency: {info['update_frequency']}")
-                
-                if info.get('coverage'):
-                    st.caption(f"🌍 Coverage: {info['coverage']}")
             
             with col2:
                 if info.get('indicator_count'):
@@ -1818,10 +1737,10 @@ with tab4:
 
 
 # ============================================================================
-# TAB 5: BATCH DOWNLOAD
+# TAB 4: BATCH DOWNLOAD
 # ============================================================================
 
-with tab5:
+with tab4:
     st.markdown("## 💾 Batch Data Download")
     st.markdown("Download data for multiple indicators and countries efficiently")
     
@@ -1952,6 +1871,6 @@ st.markdown("---")
 st.markdown(f"""
     <div style='text-align: center; color: #666; padding: 20px;'>
         <p>🌍 <b>Data360 Explorer</b> | Powered by World Bank Data360 API</p>
-        <p>Built with Streamlit • Dark Mode Optimized • All Tabs Fixed!</p>
+        <p>Made by @Gsnchez</p>
     </div>
 """, unsafe_allow_html=True)
