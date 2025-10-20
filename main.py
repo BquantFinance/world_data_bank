@@ -1329,6 +1329,9 @@ with tab1:
     st.markdown("## Browse Datasets")
     
     if 'exploring_database' in st.session_state and st.session_state.exploring_database:
+        # Add anchor at top
+        st.markdown('<div id="explorer-top"></div>', unsafe_allow_html=True)
+        
         st.markdown("""
             <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
                 <h2 style='color: white; margin: 0;'>🔍 Exploring Indicators</h2>
@@ -1345,6 +1348,8 @@ with tab1:
             if st.button("❌ Close Explorer", key="close_explore", use_container_width=True, type="secondary"):
                 del st.session_state.exploring_database
                 del st.session_state.exploring_db_name
+                # Force page to stay at top on next render
+                st.session_state.scroll_to_top = True
                 st.rerun()
         
         with st.spinner(f"🔄 Loading indicators from {st.session_state.exploring_database}..."):
@@ -1386,8 +1391,7 @@ with tab1:
                                 st.session_state.selected_indicator = ind
                                 st.session_state.query_database = st.session_state.exploring_database
                                 st.toast(f"✅ Selected: {ind['name'][:50]}...", icon="✅")
-                                st.info("💡 **Next step:** Go to '📊 Query & Visualize' tab!")
-                                time.sleep(1)
+                                st.info("💡 **Next step:** Switch to '📊 Query & Visualize' tab above!")
                         
                         st.markdown("---")
             else:
@@ -1395,10 +1399,15 @@ with tab1:
         
         st.markdown("<div style='text-align: center; margin: 30px 0;'><h3 style='color: #888;'>⬇️ Scroll down to browse other databases ⬇️</h3></div>", unsafe_allow_html=True)
         st.markdown("---")
-    else:
-        st.markdown("Explore available datasets with detailed information")
     
     # Dataset list
+    st.markdown('<div id="datasets-list"></div>', unsafe_allow_html=True)
+    
+    if 'exploring_database' not in st.session_state or not st.session_state.exploring_database:
+        st.markdown("### Browse All Datasets")
+    else:
+        st.markdown("### Browse Other Datasets")
+    
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
@@ -1444,10 +1453,19 @@ with tab1:
                 if st.button("📈 Explore", key=f"dataset_explore_{db_id}", use_container_width=True):
                     st.session_state.exploring_database = db_id
                     st.session_state.exploring_db_name = info['name']
-                    st.rerun()
+                    st.session_state.just_opened_explorer = True
+                    # Don't call st.rerun() - let Streamlit handle it naturally
             
             st.markdown("---")
-
+    
+    # Auto-scroll to top when explorer is opened
+    if st.session_state.get('just_opened_explorer'):
+        st.session_state.just_opened_explorer = False
+        st.markdown("""
+            <script>
+                window.parent.document.querySelector('section[data-testid="stAppViewContainer"]').scrollTop = 0;
+            </script>
+        """, unsafe_allow_html=True)
 
 # ============================================================================
 # TAB 2: QUERY & VISUALIZE
