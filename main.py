@@ -1682,15 +1682,222 @@ with tab2:
                                  f"data360_{st.session_state.get('current_indicator_id', 'data')}_{datetime.now().strftime('%Y%m%d')}.csv",
                                  "text/csv", use_container_width=True)
 
-# TAB 4 & 5 omitted for brevity - they work the same
-with tab4:
-    st.markdown("## Database Catalog")
-    st.markdown("Browse all databases")
-    
-with tab5:
-    st.markdown("## Batch Download")
-    st.markdown("Download multiple indicators")
 
+
+
+# ============================================================================
+# TAB 4: DATABASE CATALOG
+# ============================================================================
+
+with tab4:
+    st.markdown("## 🗂️ Database Catalog")
+    st.markdown("Browse all available databases and their characteristics")
+    
+    display_databases = {}
+    for db_id, info in DATABASE_CATALOG.items():
+        if st.session_state.get('selected_organizations') and info['organization'] not in st.session_state.selected_organizations:
+            continue
+        
+        if st.session_state.selected_themes:
+            if not any(theme in info.get('themes', []) for theme in st.session_state.selected_themes):
+                continue
+        
+        display_databases[db_id] = info
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Databases", len(st.session_state.databases))
+    with col2:
+        st.metric("Showing", len(display_databases))
+    with col3:
+        org_count = len(set(info.get('organization', 'Unknown') for info in display_databases.values()))
+        st.metric("Organizations", org_count)
+    with col4:
+        st.metric("Themes", len(THEME_TAXONOMY))
+    
+    st.markdown("---")
+    
+    st.markdown("### ⭐ Featured Databases")
+    
+    sorted_dbs = sorted(display_databases.items(), key=lambda x: x[1].get('indicator_count', 0), reverse=True)
+    
+    for db_id, info in sorted_dbs:
+        with st.expander(f"**{info['name']}** ({db_id})", expanded=False):
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.markdown(f"**Organization:** {info['organization']}")
+                st.markdown(f"**Description:** {info['description']}")
+                
+                if info.get('themes'):
+                    themes_html = " ".join([f'<span class="tag">{t}</span>' for t in info['themes']])
+                    st.markdown(f"**Themes:** {themes_html}", unsafe_allow_html=True)
+                
+                if info.get('update_frequency'):
+                    st.caption(f"📅 Update Frequency: {info['update_frequency']}")
+                
+                if info.get('coverage'):
+                    st.caption(f"🌍 Coverage: {info['coverage']}")
+            
+            with col2:
+                if info.get('indicator_count'):
+                    st.metric("Indicators", info['indicator_count'])
+                
+                if st.button("Explore", key=f"catalog_explore_{db_id}", use_container_width=True):
+                    st.session_state.exploring_database = db_id
+                    st.session_state.exploring_db_name = info['name']
+                    # Force switch to Browse Datasets tab by rerunning
+                    st.success(f"✅ Loading {info['name']}...")
+                    st.info("🔄 Switching to 'Browse Datasets' tab...")
+                    time.sleep(0.5)
+                    st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### 📚 All Databases")
+    
+    if st.session_state.get('selected_organizations') or st.session_state.selected_themes:
+        st.info(f"Showing {len(display_databases)} databases matching your filters")
+    
+    cols = st.columns(5)
+    for idx, db in enumerate(sorted(display_databases.keys())):
+        with cols[idx % 5]:
+            if st.button(db, key=f"catalog_db_{db}", use_container_width=True):
+                st.info(f"Selected: {display_databases[db]['name']}")
+
+    
+# ============================================================================
+# TAB 5: BATCH DOWNLOAD
+# ============================================================================
+
+with tab5:
+    st.markdown("## 💾 Batch Data Download")
+    st.markdown("Download data for multiple indicators and countries efficiently")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📊 Select Indicators")
+        
+        batch_db = st.selectbox("Database", st.session_state.databases, key="batch_db_select")
+        
+        if st.button("📋 Load Indicators", key="batch_load_indicators", use_container_width=True):
+            with st.spinner("Loading indicators..."):
+                st.session_state.batch_indicators_list = get_indicators_with_metadata(batch_db, limit=500)
+                st.success(f"Loaded {len(st.session_state.batch_indicators_list)} indicators")
+        
+        if 'batch_indicators_list' in st.session_state:
+            indicator_options = {ind['id']: ind['name'] for ind in st.session_state.batch_indicators_list}
+            
+            selected_batch_indicators = st.multiselect(
+                "Select indicators (max 10)",
+                options=list(indicator_options.keys()),
+                format_func=lambda x: f"{indicator_options[x][:50]}... ({x})",
+                max_selections=10,
+                key="batch_indicators"
+            )
+        else:
+            selected_batch_indicators = []
+    
+    with col2:
+        st.markdown("### 🌍 Select Countries & Period")
+        
+        countries_batch = st.multiselect(
+            "Select countries",
+            options=list(COMMON_COUNTRIES.keys()),
+            default=["USA", "GBR", "DEU", "FRA", "JPN"],
+            format_func=lambda x: f"{COMMON_COUNTRIES[x]} ({x})",
+            key="batch_countries_multi"
+        )
+        
+        if not countries_batch:
+            countries_batch = []
+        
+        year_range_batch = st.slider(
+            "Year Range",
+            min_value=1960,
+            max_value=2023,
+            value=(2010, 2023),
+            key="batch_year_range"
+        )
+        
+        if 'batch_indicators_list' in st.session_state and selected_batch_indicators and countries_batch:
+            years = year_range_batch[1] - year_range_batch[0] + 1
+            estimated = len(selected_batch_indicators) * len(countries_batch) * years
+            st.info(f"📊 Estimated records: ~{estimated:,}")
+    
+    st.markdown("---")
+    
+    selected_batch_indicators = st.session_state.get('selected_batch_indicators', [])
+    countries_batch = st.session_state.get('countries_batch', [])
+    year_range_batch = st.session_state.get('year_range_batch', (2010, 2023))
+    batch_db = st.session_state.get('batch_db', 'WB_WDI')
+    
+    has_indicators = 'batch_indicators_list' in st.session_state and selected_batch_indicators
+    has_countries = countries_batch and len(countries_batch) > 0
+    
+    if st.button("🚀 Start Batch Download", type="primary", use_container_width=True):
+        if not has_indicators:
+            st.error("Please select at least one indicator")
+        elif not has_countries:
+            st.error("Please select at least one country")
+        else:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            all_batch_data = []
+            total_queries = len(selected_batch_indicators) * len(countries_batch)
+            completed = 0
+            
+            indicator_options_map = {ind['id']: ind['name'] for ind in st.session_state.batch_indicators_list}
+            
+            for indicator in selected_batch_indicators:
+                indicator_name = indicator_options_map.get(indicator, indicator)[:30]
+                
+                for country in countries_batch:
+                    status_text.text(f"⏳ Fetching: {indicator_name}... for {COMMON_COUNTRIES.get(country, country)}")
+                    
+                    try:
+                        data = fetch_data_cached(
+                            batch_db,
+                            indicator,
+                            [country],
+                            str(year_range_batch[0]),
+                            str(year_range_batch[1])
+                        )
+                        all_batch_data.extend(data)
+                    except Exception as e:
+                        st.warning(f"⚠️ Failed: {indicator} - {country}: {str(e)}")
+                    
+                    completed += 1
+                    progress_bar.progress(completed / total_queries)
+                    time.sleep(0.05)
+            
+            status_text.text("✅ Batch download complete!")
+            
+            if all_batch_data:
+                df_batch = pd.DataFrame(all_batch_data)
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Records", f"{len(df_batch):,}")
+                with col2:
+                    st.metric("Unique Countries", df_batch['REF_AREA'].nunique())
+                with col3:
+                    st.metric("Indicators", df_batch['INDICATOR'].nunique())
+                
+                st.markdown("### 📋 Preview")
+                st.dataframe(df_batch.head(100), use_container_width=True, height=400)
+                
+                csv_batch = df_batch.to_csv(index=False)
+                st.download_button(
+                    "📥 Download Complete Dataset (CSV)",
+                    csv_batch,
+                    f"batch_download_{batch_db}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.error("No data was retrieved. Please check your selections.")
 # Footer
 st.markdown("---")
 st.markdown(f"""
