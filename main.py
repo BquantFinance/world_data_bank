@@ -917,6 +917,106 @@ def discover_databases():
     return sorted(known_databases)
 
 
+# Common abbreviation decoder for better readability
+ABBREVIATION_DECODER = {
+    # IMF Balance of Payments
+    "BOP": "Balance of Payments",
+    "BP6": "BPM6",
+    "BXSTR": "External Debt",
+    "BXSTV": "External Debt Value",
+    "SPE": "Special",
+    "USD": "US Dollars",
+    "EUR": "Euros",
+    "GBP": "British Pounds",
+    "JPY": "Japanese Yen",
+    "XDC": "SDR (Special Drawing Rights)",
+    "IARMGB": "Interest Arrears",
+    "BFOCDLOF": "Foreign Direct Investment",
+    "BMGN": "Monetary Gold",
+    "BXSTVBS": "External Debt by Sector",
+    "BIPIOPC": "Portfolio Investment",
+    "BFOLN": "Financial Derivatives",
+    "BFOINLG": "Foreign Investment",
+    "BFQINLG": "Financial Account",
+    "BFQIN": "Financial Account Inflows",
+    
+    # World Bank
+    "WDI": "World Development Indicators",
+    "AG": "Agriculture",
+    "CON": "Consumption",
+    "FERT": "Fertilizer",
+    "ZS": "% of",
+    "NY": "National Accounts",
+    "GDP": "Gross Domestic Product",
+    "MKTP": "Market Prices",
+    "CD": "Current USD",
+    "PCAP": "Per Capita",
+    "KD": "Constant USD",
+    "SP": "Population",
+    "POP": "Population",
+    "TOTL": "Total",
+    "FP": "Prices",
+    "CPI": "Consumer Price Index",
+    "SL": "Labor",
+    "UEM": "Unemployment",
+    "SE": "Education",
+    "PRM": "Primary",
+    "CMPT": "Completion Rate",
+    "FE": "Female",
+    "MA": "Male",
+    "SH": "Health",
+    "DYN": "Dynamics",
+    "LE00": "Life Expectancy",
+    "IN": "Indicator",
+    
+    # Common terms
+    "PCT": "Percent",
+    "TOT": "Total",
+    "AVG": "Average",
+    "IDX": "Index",
+    "IND": "Industry",
+    "MFG": "Manufacturing",
+    "SVC": "Services",
+    "GOVT": "Government",
+    "EXP": "Exports",
+    "IMP": "Imports",
+    "INV": "Investment",
+    "FDI": "Foreign Direct Investment",
+    "GNI": "Gross National Income",
+    "PPP": "Purchasing Power Parity"
+}
+
+
+def decode_indicator_name(indicator_id: str, raw_name: str = None) -> str:
+    """
+    Decode cryptic indicator IDs into readable names
+    """
+    # If we have a proper name from the API, use it
+    if raw_name and len(raw_name) > 20 and not raw_name.isupper():
+        return raw_name
+    
+    # Otherwise, try to decode the ID
+    # Remove database prefix
+    parts = indicator_id.split("_")
+    
+    # Skip database prefix (first 1-2 parts usually)
+    meaningful_parts = []
+    for i, part in enumerate(parts):
+        if i < 2:  # Skip database prefix
+            continue
+        
+        # Try to decode each part
+        decoded = ABBREVIATION_DECODER.get(part.upper(), part)
+        meaningful_parts.append(decoded)
+    
+    if meaningful_parts:
+        decoded_name = " - ".join(meaningful_parts)
+        return decoded_name
+    
+    # Fallback: just make it readable
+    return raw_name or indicator_id.replace("_", " ").title()
+
+
 @st.cache_data(ttl=3600)
 def get_indicators_with_metadata(database_id: str, limit: int = 500):
     """Get indicators with their metadata - uses search API to get full metadata"""
@@ -933,9 +1033,18 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
             for item in result["value"]:
                 desc = item.get("series_description", {})
                 if desc.get("idno"):
+                    raw_name = desc.get("name", "")
+                    indicator_id = desc.get("idno")
+                    
+                    # Use API name if good, otherwise decode
+                    if raw_name and len(raw_name) > 20 and not raw_name.isupper():
+                        display_name = raw_name
+                    else:
+                        display_name = decode_indicator_name(indicator_id, raw_name)
+                    
                     indicators.append({
-                        "id": desc.get("idno"),
-                        "name": desc.get("name", desc.get("idno", "").replace(f"{database_id}_", "").replace("_", " ").title()),
+                        "id": indicator_id,
+                        "name": display_name,
                         "description": desc.get("description", ""),
                         "topics": [t.get("name", "") for t in desc.get("topics", [])],
                         "source": desc.get("source", {}),
@@ -951,11 +1060,11 @@ def get_indicators_with_metadata(database_id: str, limit: int = 500):
         indicators = []
         for ind_id in indicator_ids[:limit]:
             # Create a more readable name from the ID
-            readable_name = ind_id.replace(f"{database_id}_", "").replace("_", " ").title()
+            display_name = decode_indicator_name(ind_id)
             indicators.append({
                 "id": ind_id,
-                "name": readable_name,
-                "description": f"Indicator from {database_id}",
+                "name": display_name,
+                "description": f"Indicator from {DATABASE_CATALOG.get(database_id, {}).get('name', database_id)}",
                 "topics": [],
                 "source": {},
                 "database_id": database_id
@@ -2418,7 +2527,7 @@ st.markdown(
     <div style='text-align: center; color: #666; font-size: 12px; padding: 20px;'>
         <p>🌍 <b>Data360 Explorer</b> | Powered by World Bank Data360 API</p>
         <p>Databases: {len(st.session_state.databases)} | Active filters: {len(st.session_state.selected_themes) + len(st.session_state.selected_databases)}</p>
-        <p style='margin-top: 10px; color: #888;'>Made by @Gsnchez</p>
+        <p style='margin-top: 10px; color: #888;'>Built with Streamlit • Dark Mode Optimized</p>
     </div>
     """,
     unsafe_allow_html=True
