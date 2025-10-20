@@ -1,7 +1,7 @@
 """
 World Bank Data360 Explorer - Complete Single-File Streamlit App
 Dark mode, elegant, minimalist interface for exploring global data
-STREAMLINED VERSION - 4 tabs, no redundancy
+COMPLETE VERSION with Data Availability Checker
 """
 
 import streamlit as st
@@ -1064,6 +1064,46 @@ def fetch_data_cached(database_id: str, indicator: str, countries: List[str],
     return all_data
 
 
+@st.cache_data(ttl=3600)
+def check_data_availability(database_id: str, indicator: str, sample_size: int = 100):
+    """Quick check to see what data is available for an indicator"""
+    client = Data360Client()
+    
+    try:
+        # Fetch a sample to check availability
+        result = client.get_data(
+            database_id=database_id,
+            indicator=indicator,
+            auto_paginate=True,
+            max_records=sample_size
+        )
+        
+        data = result.get("value", [])
+        
+        if not data:
+            return None
+        
+        df = pd.DataFrame(data)
+        
+        # Extract metadata
+        countries = sorted(df['REF_AREA'].unique().tolist())
+        years = sorted(df['TIME_PERIOD'].unique().tolist())
+        
+        availability = {
+            "total_records": len(data),
+            "countries": countries,
+            "country_count": len(countries),
+            "years": years,
+            "year_range": f"{min(years)}-{max(years)}" if years else "N/A",
+            "latest_year": max(years) if years else None,
+            "sample_countries": countries[:10]  # Show first 10
+        }
+        
+        return availability
+    except Exception as e:
+        return None
+
+
 # ============================================================================
 # VISUALIZATION FUNCTIONS
 # ============================================================================
@@ -1318,7 +1358,7 @@ with stat_col5:
 
 st.markdown("<div style='text-align: center; margin: 20px 0;'><div style='height: 2px; background: linear-gradient(90deg, transparent, #667eea, transparent);'></div></div>", unsafe_allow_html=True)
 
-# Tabs - Now only 4!
+# Tabs - 4 tabs
 tab1, tab2, tab3, tab4 = st.tabs(["🗂️ Browse Datasets", "📊 Query & Visualize", "🗄️ Database Catalog", "💾 Batch Download"])
 
 # ============================================================================
@@ -1329,7 +1369,6 @@ with tab1:
     st.markdown("## Browse Datasets")
     
     if 'exploring_database' in st.session_state and st.session_state.exploring_database:
-        # Add anchor at top
         st.markdown('<div id="explorer-top"></div>', unsafe_allow_html=True)
         
         st.markdown("""
@@ -1348,7 +1387,6 @@ with tab1:
             if st.button("❌ Close Explorer", key="close_explore", use_container_width=True, type="secondary"):
                 del st.session_state.exploring_database
                 del st.session_state.exploring_db_name
-                # Force page to stay at top on next render
                 st.session_state.scroll_to_top = True
                 st.rerun()
         
@@ -1454,7 +1492,6 @@ with tab1:
                     st.session_state.exploring_database = db_id
                     st.session_state.exploring_db_name = info['name']
                     st.session_state.just_opened_explorer = True
-                    # Don't call st.rerun() - let Streamlit handle it naturally
             
             st.markdown("---")
     
@@ -1466,6 +1503,7 @@ with tab1:
                 window.parent.document.querySelector('section[data-testid="stAppViewContainer"]').scrollTop = 0;
             </script>
         """, unsafe_allow_html=True)
+
 
 # ============================================================================
 # TAB 2: QUERY & VISUALIZE
@@ -1491,15 +1529,69 @@ with tab2:
                 del st.session_state.selected_indicator
                 st.rerun()
         
-        # Show indicator details
-        with st.expander("ℹ️ Indicator Details", expanded=False):
+        # Show indicator details with availability check
+        with st.expander("ℹ️ Indicator Details & Data Availability", expanded=True):
             st.markdown(f"**Full Name:** {ind['name']}")
             st.markdown(f"**ID:** `{ind['id']}`")
+            st.markdown(f"**Database:** {DATABASE_CATALOG.get(ind['database_id'], {}).get('name', ind['database_id'])}")
+            
             if ind.get('description'):
                 st.markdown(f"**Description:** {ind['description']}")
             if ind.get('topics'):
                 topics_html = " ".join([f'<span class="tag">{t}</span>' for t in ind['topics'] if t])
                 st.markdown(topics_html, unsafe_allow_html=True)
+            
+            st.markdown("---")
+            
+            # Data Availability Checker
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown("### 📊 Data Availability")
+            with col2:
+                check_availability = st.button("🔍 Check", key=f"check_avail_{ind['id']}", use_container_width=True, type="secondary")
+            
+            if check_availability:
+                with st.spinner("Checking data availability..."):
+                    availability = check_data_availability(ind['database_id'], ind['id'])
+                    
+                    if availability:
+                        st.session_state[f"availability_{ind['id']}"] = availability
+                    else:
+                        st.warning("⚠️ Unable to check availability or no data found for this indicator.")
+            
+            # Display availability info if checked
+            if f"availability_{ind['id']}" in st.session_state:
+                avail = st.session_state[f"availability_{ind['id']}"]
+                
+                st.success(f"✅ Data available! **{avail['total_records']:,}** records found (sample)")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("📅 Year Range", avail['year_range'])
+                with col2:
+                    st.metric("🌍 Countries", avail['country_count'])
+                with col3:
+                    st.metric("🕐 Latest Year", avail['latest_year'] or "N/A")
+                
+                # Show available countries
+                with st.expander(f"🌍 Available Countries ({avail['country_count']})", expanded=False):
+                    countries_display = ", ".join([
+                        f"{COMMON_COUNTRIES.get(c, c)} ({c})" 
+                        for c in avail['sample_countries']
+                    ])
+                    if avail['country_count'] > 10:
+                        countries_display += f" ... and {avail['country_count'] - 10} more"
+                    st.markdown(countries_display)
+                    
+                    # Suggest countries for query
+                    suggested = ", ".join(avail['sample_countries'][:5])
+                    st.info(f"💡 **Suggested query:** Try these countries: `{suggested}`")
+                
+                # Show available years
+                years_display = ", ".join(map(str, avail['years'][:15]))
+                if len(avail['years']) > 15:
+                    years_display += f" ... and {len(avail['years']) - 15} more years"
+                st.caption(f"📅 **Available years:** {years_display}")
         
         st.markdown("---")
         st.markdown("### 🎯 Set Query Parameters")
@@ -1584,11 +1676,69 @@ with tab2:
             selected_ind_details = next((ind for ind in st.session_state.available_indicators if ind['id'] == selected_indicator_id), None)
             
             if selected_ind_details:
-                with st.expander("ℹ️ Indicator Details", expanded=False):
+                # Show indicator details with availability check (same as above)
+                with st.expander("ℹ️ Indicator Details & Data Availability", expanded=True):
                     st.markdown(f"**Name:** {selected_ind_details['name']}")
                     st.markdown(f"**ID:** `{selected_ind_details['id']}`")
-                    if selected_ind_details['description']:
+                    st.markdown(f"**Database:** {DATABASE_CATALOG.get(selected_ind_details['database_id'], {}).get('name', selected_ind_details['database_id'])}")
+                    
+                    if selected_ind_details.get('description'):
                         st.markdown(f"**Description:** {selected_ind_details['description']}")
+                    if selected_ind_details.get('topics'):
+                        topics_html = " ".join([f'<span class="tag">{t}</span>' for t in selected_ind_details['topics'] if t])
+                        st.markdown(topics_html, unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+                    
+                    # Data Availability Checker
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown("### 📊 Data Availability")
+                    with col2:
+                        check_availability_manual = st.button("🔍 Check", key=f"check_avail_manual_{selected_ind_details['id']}", use_container_width=True, type="secondary")
+                    
+                    if check_availability_manual:
+                        with st.spinner("Checking data availability..."):
+                            availability = check_data_availability(selected_ind_details['database_id'], selected_ind_details['id'])
+                            
+                            if availability:
+                                st.session_state[f"availability_{selected_ind_details['id']}"] = availability
+                            else:
+                                st.warning("⚠️ Unable to check availability or no data found for this indicator.")
+                    
+                    # Display availability info if checked
+                    if f"availability_{selected_ind_details['id']}" in st.session_state:
+                        avail = st.session_state[f"availability_{selected_ind_details['id']}"]
+                        
+                        st.success(f"✅ Data available! **{avail['total_records']:,}** records found (sample)")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("📅 Year Range", avail['year_range'])
+                        with col2:
+                            st.metric("🌍 Countries", avail['country_count'])
+                        with col3:
+                            st.metric("🕐 Latest Year", avail['latest_year'] or "N/A")
+                        
+                        # Show available countries
+                        with st.expander(f"🌍 Available Countries ({avail['country_count']})", expanded=False):
+                            countries_display = ", ".join([
+                                f"{COMMON_COUNTRIES.get(c, c)} ({c})" 
+                                for c in avail['sample_countries']
+                            ])
+                            if avail['country_count'] > 10:
+                                countries_display += f" ... and {avail['country_count'] - 10} more"
+                            st.markdown(countries_display)
+                            
+                            # Suggest countries for query
+                            suggested = ", ".join(avail['sample_countries'][:5])
+                            st.info(f"💡 **Suggested query:** Try these countries: `{suggested}`")
+                        
+                        # Show available years
+                        years_display = ", ".join(map(str, avail['years'][:15]))
+                        if len(avail['years']) > 15:
+                            years_display += f" ... and {len(avail['years']) - 15} more years"
+                        st.caption(f"📅 **Available years:** {years_display}")
                 
                 st.markdown("---")
                 st.markdown("### 🎯 Query Parameters")
