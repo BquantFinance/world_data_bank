@@ -2109,14 +2109,16 @@ with tab3:
                 st.session_state.query_database = current_db
                 st.session_state.last_selected_db = current_db
         
-        # Show selection banner
-        col1, col2 = st.columns([5, 1])
-        with col1:
-            st.success(f"✅ Pre-selected: **{ind['name']}**")
-        with col2:
-            if st.button("❌", key="clear_selection", help="Clear selection"):
-                del st.session_state.selected_indicator
-                st.rerun()
+        # Only show selection banner if we haven't loaded indicators yet or just arrived
+        if not st.session_state.get('indicators_loaded_once', False):
+            # Show selection banner
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.success(f"✅ Pre-selected: **{ind['name']}**")
+            with col2:
+                if st.button("❌", key="clear_selection", help="Clear selection"):
+                    del st.session_state.selected_indicator
+                    st.rerun()
     
     col1, col2, col3 = st.columns(3)
     
@@ -2144,6 +2146,8 @@ with tab3:
                 del st.session_state.available_indicators
             if 'selected_indicator' in st.session_state:
                 del st.session_state.selected_indicator
+            if 'indicators_loaded_once' in st.session_state:
+                del st.session_state.indicators_loaded_once
             st.info(f"🔄 Database changed to {DATABASE_CATALOG.get(selected_db, {}).get('name', selected_db)}. Click 'Load Indicators' to see available indicators.")
     
     with col2:
@@ -2152,6 +2156,9 @@ with tab3:
                 # Clear old selection when loading new indicators
                 if 'selected_indicator' in st.session_state:
                     del st.session_state.selected_indicator
+                
+                # Mark that we've loaded indicators manually
+                st.session_state.indicators_loaded_once = True
                 
                 st.session_state.available_indicators = get_indicators_with_metadata(selected_db)
                 st.session_state.query_database = selected_db
@@ -2180,7 +2187,7 @@ with tab3:
         selected_indicator_id = st.selectbox(
             "Select Indicator",
             options=list(indicator_names.keys()),
-            format_func=lambda x: f"{indicator_names[x]} ({x})",
+            format_func=lambda x: f"{indicator_names[x][:90]}{'...' if len(indicator_names[x]) > 90 else ''}",
             index=default_index,
             key="query_indicator_select",
             help="Choose an indicator to query"
